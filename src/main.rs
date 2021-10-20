@@ -10,6 +10,7 @@ struct Tokens {
     imported_files: HashSet<String>,
 }
 
+type Statement = Vec<String>;
 impl Tokens {
     fn read(&mut self) -> Option<String> {
         while self.token_buffer.is_empty() {
@@ -79,7 +80,7 @@ impl Tokens {
         }
     }
 
-    fn readstat(&mut self) -> Vec<String> {
+    fn readstat(&mut self) -> Statement {
         todo!();
     }
 }
@@ -194,6 +195,40 @@ impl FrameStack {
 
 }
 
+struct MM {
+    fs: FrameStack,
+    labels: HashMap<String, (String, Vec<(String, String)>, Vec<String>)>,
+    begin_label: String,
+    stop_label: String,
+}
+
+impl MM {
+    fn new(begin_label: String, stop_label: String) -> MM {
+        MM {
+            fs: FrameStack::default(),
+            labels: HashMap::new(),
+            begin_label: begin_label,
+            stop_label: stop_label,
+        }
+    }
+
+    fn read(&mut self, toks: Tokens) {
+     todo!();
+    }
+
+    fn apply_subst(&mut self, stat: Vec<String>, subst: HashMap<String, String> ) -> Vec<String> {
+        todo!();
+    }
+
+    //probably wrong type for proof
+    fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
+        todo!();
+    }
+
+    fn verify(&mut self, stat_label: String, stat: Statement, proof: Vec<String>) {
+        todo!();
+    }
+}
 fn main() {
     println!("Hello, world!");
 }
