@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 use std::fs::File;
 use std::io::BufReader;
 
@@ -78,30 +78,44 @@ impl Tokens {
             }
         }
     }
+
+    fn readstat(&mut self) -> Vec<String> {
+        todo!();
+    }
 }
 
+#[derive(Default, Debug)]
 struct Frame {
     c: HashSet<String>,
     v: HashSet<String>,
     d: HashSet<String>,
     f: Vec<(String, String)>,
     f_labels: HashMap<String, String>,
-    e: Vec<String>,
-    e_labels: HashMap<String, String>,
+    e: Vec<Vec<String>>,
+    e_labels: HashMap<Vec<String>, String>,
 }
 
+#[derive(Default, Debug)]
 struct FrameStack {
     list: Vec<Frame>,
 
 }
 
+#[derive(Default, Debug)]
+struct Assertion {
+    dvs: Vec<(String, String)>,
+    f_hyps: Vec<String>,
+    e_hyps: Vec<String>,
+    stat: String,
+}
+
 impl FrameStack {
     fn push(&mut self, token: String) {
-        self.list.push(token)
+        self.list.push(Frame::default());
     }
 
     fn add_c(&mut self, token: String) {
-        let frame = self.list.last().unwrap();
+        let frame = &mut self.list.last_mut().unwrap();
 
         if frame.c.contains(&token) {
             panic!("Const already defined")
@@ -113,7 +127,7 @@ impl FrameStack {
     }
 
     fn add_v(&mut self, token: String) {
-        let frame = self.list.last().unwrap();
+        let frame = &mut self.list.last_mut().unwrap();
 
         if frame.c.contains(&token) {
             panic!("Variable already defined")
@@ -125,35 +139,59 @@ impl FrameStack {
     }
 
     fn add_f(&mut self, var: String, kind: String, label: String) {
-        if !self.lookup_v(var) {
+        if !self.lookup_v(&var) {
             panic!("var not defined")
         }
-        if !self.lookup_c(kind) {
+        if !self.lookup_c(&kind) {
             panic!("const not defined")
         }
 
-        let frame = self.list.last().unwrap();
-        if frame.contains_key(var) {
+        let frame = self.list.last_mut().unwrap();
+        if frame.f_labels.contains_key(&var) {
             panic!("f already defined in scope")
         }
-        frame.f.push((var, kind));
-        frame.f_labels[var] = label;
+        frame.f.push((var.clone(), kind));
+        frame.f_labels.insert(var.into(), label);
     }
 
     fn add_e(&mut self, stat: Vec<String>, label: String) {
-        let frame = self.list.last().unwrap();
+        let frame = self.list.last_mut().unwrap();
 
-        frame.e.push(stat);
-        frame.e_labels[stat.join(" ")] = label;
+        frame.e.push(stat.clone());
+        frame.e_labels.insert(stat, label);
 
     }
 
     fn add_d(&mut self, stat: Vec<String>) {
         let frame = self.list.last().unwrap();
-
-
-
+        unimplemented!();
     }
+
+    fn lookup_c(&mut self, token: &str) -> bool {
+        unimplemented!();
+    }
+
+    fn lookup_v(&mut self, token: &str) -> bool {
+        unimplemented!();
+    }
+
+
+    fn lookup_f(&mut self, var: String) -> String {
+        unimplemented!();
+    }
+
+    fn lookup_d(&mut self, x: String, y: String ) -> bool {
+        unimplemented!();
+    }
+
+    fn lookup_e(&mut self, var: String) -> String {
+        unimplemented!();
+    }
+
+    fn make_assertion(&mut self, stat: String) -> Assertion {
+        unimplemented!();
+    }
+
 }
 
 fn main() {
