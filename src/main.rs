@@ -1,7 +1,8 @@
 use std::{collections::{HashMap, HashSet}};
 use std::fs::File;
 use std::io::BufReader;
-
+use std::cmp::min;
+use std::cmp::max;
 use std::io::BufRead;
 
 struct Tokens {
@@ -81,7 +82,16 @@ impl Tokens {
     }
 
     fn readstat(&mut self) -> Statement {
-        todo!();
+        let mut stat = vec!();
+        let mut token = self.read_comment().unwrap();
+
+        while token != "$." {
+            stat.push(token);
+            token = self.read_comment().expect("EOF before $.");
+        }
+        return stat;
+
+
     }
 }
 
@@ -89,7 +99,7 @@ impl Tokens {
 struct Frame {
     c: HashSet<String>,
     v: HashSet<String>,
-    d: HashSet<String>,
+    d: HashSet<Vec<(String, String)>>,
     f: Vec<(String, String)>,
     f_labels: HashMap<String, String>,
     e: Vec<Vec<String>>,
@@ -163,9 +173,18 @@ impl FrameStack {
 
     }
 
-    fn add_d(&mut self, stat: Vec<String>) {
-        let frame = self.list.last().unwrap();
-        unimplemented!();
+    fn add_d(&mut self, stat: Statement) {
+        let mut frame = self.list.last_mut().unwrap();
+        let mut product_vec = vec!();
+        for x in &stat {
+            for y in &stat {
+                if x != y {
+                    product_vec.push((min(x.clone(), y.clone()), max(x.clone(), y.clone())));
+                }
+            }
+        }
+        frame.d.insert(product_vec);
+
     }
 
     fn lookup_c(&mut self, token: &str) -> bool {
@@ -226,6 +245,10 @@ impl MM {
     }
 
     fn verify(&mut self, stat_label: String, stat: Statement, proof: Vec<String>) {
+        todo!();
+    }
+
+    fn dump(&mut self) {
         todo!();
     }
 }
