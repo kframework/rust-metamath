@@ -99,7 +99,7 @@ impl Tokens {
 struct Frame {
     c: HashSet<String>,
     v: HashSet<String>,
-    d: HashSet<Vec<(String, String)>>,
+    d: HashSet<(String, String)>,
     f: Vec<(String, String)>,
     f_labels: HashMap<String, String>,
     e: Vec<Vec<String>>,
@@ -175,33 +175,34 @@ impl FrameStack {
 
     fn add_d(&mut self, stat: Statement) {
         let mut frame = self.list.last_mut().unwrap();
-        let mut product_vec = vec!();
+        //let mut product_vec = vec!();
         for x in &stat {
             for y in &stat {
                 if x != y {
-                    product_vec.push((min(x.clone(), y.clone()), max(x.clone(), y.clone())));
+                    frame.d.insert((min(x.clone(), y.clone()), max(x.clone(), y.clone())));
                 }
             }
         }
-        frame.d.insert(product_vec);
 
     }
 
     fn lookup_c(&mut self, token: &str) -> bool {
-        unimplemented!();
+        self.list.iter().rev().any(|fr| fr.c.contains(token))
     }
 
     fn lookup_v(&mut self, token: &str) -> bool {
-        unimplemented!();
+        self.list.iter().rev().any(|fr| fr.v.contains(token))
     }
 
 
     fn lookup_f(&mut self, var: String) -> String {
-        unimplemented!();
+        let f = self.list.iter().rev().find(|frame| frame.f_labels.contains_key(&var)).unwrap();
+
+        f.f_labels[&var].clone()
     }
 
     fn lookup_d(&mut self, x: String, y: String ) -> bool {
-        unimplemented!();
+        self.list.iter().rev().any(|fr| fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone()))))
     }
 
     fn lookup_e(&mut self, var: String) -> String {
