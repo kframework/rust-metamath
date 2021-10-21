@@ -103,7 +103,7 @@ struct Frame {
     f: Vec<(String, String)>,
     f_labels: HashMap<String, String>,
     e: Vec<Vec<String>>,
-    e_labels: HashMap<Vec<String>, String>,
+    e_labels: HashMap<Statement, String>,
 }
 
 #[derive(Default, Debug)]
@@ -205,8 +205,11 @@ impl FrameStack {
         self.list.iter().rev().any(|fr| fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone()))))
     }
 
-    fn lookup_e(&mut self, var: String) -> String {
-        unimplemented!();
+    fn lookup_e(&mut self, stmt: Statement) -> String {
+        let f = self.list.iter().rev().find(|frame| frame.e_labels.contains_key(&stmt)).expect("Bad e");
+
+
+        f.e_labels[&stmt].clone()
     }
 
     fn make_assertion(&mut self, stat: String) -> Assertion {
