@@ -20,8 +20,7 @@ impl Tokens {
             // pretend this succeeeds
             let result = self.lines_buffer.last_mut().unwrap().read_line(&mut line);
 
-            match result {
-                Ok(num) => {
+             if let Ok(num) = result {
                     self.lines_buffer.pop();
                     if num == 0 {
                         self.token_buffer = line.split_whitespace().map(|x| x.into()).collect();
@@ -32,8 +31,7 @@ impl Tokens {
                             return None;
                         }
                     }
-                }
-                Err(_) => {}
+
             }
         }
         self.token_buffer.pop()
@@ -90,7 +88,7 @@ impl Tokens {
             stat.push(token);
             token = self.read_comment().expect("EOF before $.");
         }
-        return stat;
+        stat
 
 
     }
@@ -163,7 +161,7 @@ impl FrameStack {
             panic!("f already defined in scope")
         }
         frame.f.push((var.clone(), kind));
-        frame.f_labels.insert(var.into(), label);
+        frame.f_labels.insert(var, label);
     }
 
     fn add_e(&mut self, stat: Vec<String>, label: String) {
