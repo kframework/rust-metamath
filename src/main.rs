@@ -5,6 +5,7 @@ use std::cmp::min;
 use std::cmp::max;
 use std::io::BufRead;
 
+
 struct Tokens {
     lines_buffer: Vec<BufReader<File>>,
     token_buffer: Vec<String>,
@@ -121,7 +122,7 @@ struct Assertion {
 }
 
 impl FrameStack {
-    fn push(&mut self, token: String) {
+    fn push(&mut self) {
         self.list.push(Frame::default());
     }
 
@@ -246,7 +247,7 @@ impl FrameStack {
         });
 
                                    Assertion {
-                                       dvs,
+                                         dvs,
                                        f_hyps,
                                        e_hyps,
                                        stat,
@@ -257,9 +258,11 @@ impl FrameStack {
 
 }
 
+// first one is label type,
+type LabelEntry = (String, Vec<(String, String)>);
 struct MM {
     fs: FrameStack,
-    labels: HashMap<String, (String, Vec<(String, String)>, Vec<String>)>,
+    labels: HashMap<String, LabelEntry>,
     begin_label: String,
     stop_label: String,
 }
@@ -269,13 +272,61 @@ impl MM {
         MM {
             fs: FrameStack::default(),
             labels: HashMap::new(),
-            begin_label: begin_label,
-            stop_label: stop_label,
+            begin_label,
+            stop_label,
         }
     }
 
-    fn read(&mut self, toks: Tokens) {
-     todo!();
+    fn read(&mut self, toks: &mut Tokens) {
+        self.fs.push();
+        let mut label: Option<String> = None;
+        let tok = toks.read_comment();
+        loop {
+            match tok.as_deref() {
+                Some("$}") => break,
+                Some("$c") => {
+                    for tok in toks.readstat() {
+                        self.fs.add_c(tok);
+                    }
+                }
+                Some("$v") => {
+                    for tok in toks.readstat() {
+                        self.fs.add_v(tok);
+                    }
+                }
+                Some("$f") => {
+                    let stat = toks.readstat();
+                    let label1 = label.clone(); //I'll figure it out later I promise
+                    if label1.is_none() {
+                        panic!("$f must have label");
+                    }
+                    if stat.len() != 2 {
+                        panic!("$f must have length 2");
+                    }
+                    let label_u = &label1.unwrap(); //wow I'm bad
+
+                    println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
+                    self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.into());
+                    self.labels.insert(label_u.to_string(), ("$f".to_string(), vec![(stat[0].clone(), stat[1].clone())]));
+                    label = None;
+                }
+                Some("$a") => {
+                    let label1 = label.clone(); //I'll figure it out later I promise
+                    if label.is_none() {
+                        panic!("$a must hae label")
+                    }
+
+                    let label_u = &label1.unwrap();
+                }
+                Some(_) => {}
+                None => break,
+            }
+
+
+        }
+
+        
+
     }
 
     fn apply_subst(&mut self, stat: Vec<String>, subst: HashMap<String, String> ) -> Vec<String> {
