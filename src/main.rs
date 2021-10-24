@@ -175,7 +175,7 @@ impl FrameStack {
     }
 
     fn add_d(&mut self, stat: Statement) {
-        let mut frame = self.list.last_mut().unwrap();
+        let frame = self.list.last_mut().unwrap();
         //let mut product_vec = vec!();
         for x in &stat {
             for y in &stat {
@@ -214,7 +214,7 @@ impl FrameStack {
     }
 
     fn make_assertion(&mut self, stat: Statement) -> Assertion {
-        let frame = self.list.last_mut().unwrap();
+        let _frame = self.list.last_mut().unwrap();
 
         let e_hyps: Vec<Statement> = self.list.iter().flat_map(|fr| fr.e.clone()).collect();
 
@@ -316,7 +316,7 @@ impl MM {
                         panic!("$a must hae label")
                     }
 
-                    let label_u = &label1.unwrap();
+                    let _label_u = &label1.unwrap();
                 }
                 Some(_) => {}
                 None => break,
@@ -329,16 +329,16 @@ impl MM {
 
     }
 
-    fn apply_subst(&mut self, stat: Vec<String>, subst: HashMap<String, String> ) -> Vec<String> {
+    fn apply_subst(&mut self, _stat: Vec<String>, _subst: HashMap<String, String> ) -> Vec<String> {
         todo!();
     }
 
     //probably wrong type for proof
-    fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
+    fn decompress_proof(&mut self, _stat: Statement, _proof: Vec<String>) -> Vec<String> {
         todo!();
     }
 
-    fn verify(&mut self, stat_label: String, stat: Statement, proof: Vec<String>) {
+    fn verify(&mut self, _stat_label: String, _stat: Statement, _proof: Vec<String>) {
         todo!();
     }
 
