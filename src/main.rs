@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet, VecDeque}};
 use std::fs::File;
 use std::io::BufReader;
 use std::cmp::min;
@@ -114,10 +114,10 @@ struct FrameStack {
 
 #[derive(Default, Debug)]
 struct Assertion {
-    dvs: Vec<(String, String)>,
-    f_hyps: Vec<String>,
-    e_hyps: Vec<String>,
-    stat: String,
+    dvs: HashSet<(String, String)>,
+    f_hyps: VecDeque<(String, String)>,
+    e_hyps: Vec<Statement>,
+    stat: Statement,
 }
 
 impl FrameStack {
@@ -212,9 +212,48 @@ impl FrameStack {
         f.e_labels[&stmt].clone()
     }
 
-    fn make_assertion(&mut self, stat: String) -> Assertion {
-        unimplemented!();
+    fn make_assertion(&mut self, stat: Statement) -> Assertion {
+        let frame = self.list.last_mut().unwrap();
+
+        let e_hyps: Vec<Statement> = self.list.iter().flat_map(|fr| fr.e.clone()).collect();
+
+        let stat_vec = vec!(stat.clone());
+
+        let chained = e_hyps.iter().chain(stat_vec.iter());
+
+
+        let mut mand_vars : HashSet<&String> = chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
+
+
+        // this is absolutely terrible.
+        // Definetely needs to be redone
+        let cartesian : HashSet<(String, String)> = mand_vars.clone().
+            into_iter().flat_map(|x| mand_vars.clone().into_iter().map(move |y| (x.clone(), y.clone()))).collect();
+
+
+        let dvs : HashSet<(String, String)> = self.list.iter().
+            flat_map(|fr| fr.d.intersection(&cartesian)).cloned().collect();
+
+
+        let mut f_hyps = VecDeque::new();
+        self.list.iter().rev().for_each(|fr| {
+            fr.f.iter().for_each(|(k, v)| {
+                if mand_vars.contains(&v) {
+                    mand_vars.remove(&v);
+                    f_hyps.push_front((k.clone(), v.clone()));
+                }
+            });
+        });
+
+                                   Assertion {
+                                       dvs,
+                                       f_hyps,
+                                       e_hyps,
+                                       stat,
+                                   }
+
     }
+
 
 }
 
