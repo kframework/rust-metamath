@@ -285,8 +285,8 @@ impl MM {
         MM {
             fs: FrameStack::default(),
             labels: HashMap::new(),
-            begin_label: begin_label,
-            stop_label: stop_label ,
+            begin_label,
+            stop_label ,
         }
     }
 
@@ -404,7 +404,7 @@ impl MM {
     fn find_vars(&self, stat: &Statement) -> Vec<String>{
         let mut vars: Vec<String> = vec!();
         for x in stat {
-            if !vars.contains(&x) && self.fs.lookup_v(&x) {
+            if !vars.contains(x) && self.fs.lookup_v(x) {
                 vars.push(x.to_owned());
             }
         }
@@ -503,13 +503,13 @@ impl MM {
 
     fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Vec<String>) {
         let mut stack : Vec<Statement> = vec!();
-        let stat_type = stat[0].clone();
+        let _stat_type = stat[0].clone();
         if proof[0] == "(" {
             proof = self.decompress_proof(stat.clone(), proof);
         }
 
         for label in proof {
-            let (steptyp, stepdat) = &self.labels[&label];
+            let (_steptyp, stepdat) = &self.labels[&label];
             println!("{:?} : {:?}", label, self.labels[&label]);
 
             match stepdat {
@@ -561,7 +561,7 @@ impl MM {
                         }
 
                         stack.drain(stack.len() - npop..);
-                        stack.push(self.apply_subst(&result, &subst));
+                        stack.push(self.apply_subst(result, &subst));
 
                     }
                 }
