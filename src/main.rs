@@ -192,7 +192,7 @@ impl FrameStack {
     }
 
 
-    fn lookup_f(&mut self, var: String) -> String {
+    fn lookup_f(&self, var: String) -> String {
         let f = self.list.iter().rev().find(|frame| frame.f_labels.contains_key(&var)).unwrap();
 
         f.f_labels[&var].clone()
@@ -202,7 +202,7 @@ impl FrameStack {
         self.list.iter().rev().any(|fr| fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone()))))
     }
 
-    fn lookup_e(&mut self, stmt: Statement) -> String {
+    fn lookup_e(&self, stmt: Statement) -> String {
         let f = self.list.iter().rev().find(|frame| frame.e_labels.contains_key(&stmt)).expect("Bad e");
 
 
@@ -384,13 +384,117 @@ impl MM {
 
     }
 
-    fn apply_subst(&mut self, _stat: Vec<String>, _subst: HashMap<String, String> ) -> Vec<String> {
-        todo!();
+    fn apply_subst(&mut self, stat: Statement, subst: HashMap<String, Statement> ) -> Statement {
+        let mut result = vec![];
+
+        for tok in stat {
+            if subst.contains_key(&tok) {
+                result.extend(subst[&tok].clone()); //very bad again
+            } else {
+                result.push(tok);
+            }
+        }
+        return result;
     }
 
-    //probably wrong type for proof
-    fn decompress_proof(&mut self, _stat: Statement, _proof: Vec<String>) -> Vec<String> {
-        todo!();
+    fn find_vars(&mut self, stat: Statement) -> Vec<String>{
+        let mut vars = vec!();
+        for x in stat {
+            if !vars.contains(&x) && self.fs.lookup_v(&x) {
+                vars.push(x);
+            }
+        }
+
+        return vars;
+    }
+
+    fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
+
+        let Assertion { dvs: dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: stat }  = self.fs.make_assertion(stat);
+
+        let mand_hyps = mand_hyp_stmnts.iter().map(|(k, v)| self.fs.lookup_f(v.to_string()));
+
+        let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
+
+        let mut labels: Vec<String> = mand_hyps.chain(hyps).collect();
+
+        let hyp_end = labels.len();
+
+        let ep = proof.iter().position(|x| x == ")").expect("Failed to find matching parthesis");
+
+        labels.extend((&proof[1..ep]).iter().cloned());
+
+        let compressed_proof = proof[ep + 1..].join("");
+
+        println!("Labels {:?}", labels);
+        println!("proof {}", compressed_proof);
+
+        let mut proof_ints : Vec<i32> = vec!();
+        let mut cur_int = 0;
+
+
+        for ch in compressed_proof.chars() {
+            if ch == 'Z' {
+                proof_ints.push(-1); //change this to option instead of this hack
+            } else if 'A' <= ch && ch <= 'T' {
+                cur_int = (20 * cur_int + (ch as i32 - 'A' as i32 + 1) as i32);
+                proof_ints.push(cur_int - 1);
+                cur_int = 0;
+            } else if 'U' <= ch && ch <= 'Y' {
+                cur_int = (5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32);
+            }
+        }
+
+        println!("proof_ints: {:?}", proof_ints);
+
+        let label_end = labels.len();
+
+        let mut decompressed_ints = vec!();
+        let mut subproofs = vec!();
+        let mut prev_proofs : Vec<Vec<i32>>= vec!();
+
+        for pf_int in &proof_ints {
+            let pf_int = *pf_int;
+            if pf_int == -1 {
+                subproofs.push(prev_proofs.last().unwrap().clone());
+            } else if 0 <= pf_int && pf_int < hyp_end as i32 {
+                prev_proofs.push(vec![pf_int]);
+            } else if hyp_end <= pf_int as usize  && (pf_int as usize) < label_end {
+                decompressed_ints.push(pf_int);
+
+                let step = &self.labels[&labels[pf_int as usize]];
+
+
+                let (step_type, step_data) = step;
+
+                match step_data {
+                    Ap(Assertion {dvs : sd, f_hyps: svars, e_hyps: shyps, stat: sresult}) => {
+                        let nhyps = shyps.len() + svars.len();
+
+                        let new_prevpf : Vec<i32>;
+                        if nhyps != 0 {
+                            let new_index = prev_proofs.len() - nhyps;
+                            new_prevpf = prev_proofs[(new_index)..].iter().flatten().copied().chain(std::iter::once(pf_int)).collect();
+                            prev_proofs = prev_proofs[..new_index].to_vec();
+                        } else {
+                            new_prevpf = vec![pf_int];
+                        }
+                        prev_proofs.push(new_prevpf)
+                    }
+                    _ => {prev_proofs.push(vec![pf_int])}
+                }
+            } else if label_end <= pf_int as usize {
+                let pf = &subproofs[pf_int as usize - label_end];
+                println!("expanded subpf {:?}", pf);
+                decompressed_ints.extend(pf);
+                prev_proofs.push(pf.to_vec());
+            }
+        }
+
+        println!("decompressed ints: {:?}", decompressed_ints);
+
+        return decompressed_ints.iter().map(|i| labels[*i as usize].clone()).collect(); //fix the clone
+
     }
 
     fn verify(&mut self, _stat_label: String, _stat: Statement, _proof: Vec<String>) {
