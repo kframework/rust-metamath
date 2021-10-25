@@ -366,7 +366,7 @@ impl MM {
                 Some("${") => {
                     self.read(toks);
                 }
-                Some(x) => if !x.starts_with("$") {
+                Some(x) => if !x.starts_with('$') {
                     label = tok;
                 }
                 Some(_) => {
@@ -394,7 +394,7 @@ impl MM {
                 result.push(tok);
             }
         }
-        return result;
+        result
     }
 
     fn find_vars(&mut self, stat: Statement) -> Vec<String>{
@@ -405,7 +405,7 @@ impl MM {
             }
         }
 
-        return vars;
+        vars
     }
 
     fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
@@ -436,11 +436,11 @@ impl MM {
         for ch in compressed_proof.chars() {
             if ch == 'Z' {
                 proof_ints.push(-1); //change this to option instead of this hack
-            } else if 'A' <= ch && ch <= 'T' {
+            } else if ('A'..='T').contains(&ch) {
                 cur_int = 20 * cur_int + (ch as i32 - 'A' as i32 + 1) as i32;
                 proof_ints.push(cur_int - 1);
                 cur_int = 0;
-            } else if 'U' <= ch && ch <= 'Y' {
+            } else if ('U'..='Y').contains(&ch) {
                 cur_int = 5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32;
             }
         }
