@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, VecDeque}};
+use std::{collections::{HashMap, HashSet, VecDeque}, ops::Index, os::unix::process};
 use std::fs::File;
 use std::io::BufReader;
 use std::cmp::min;
@@ -89,8 +89,6 @@ impl Tokens {
             token = self.read_comment().expect("EOF before $.");
         }
         stat
-
-
     }
 }
 
@@ -257,20 +255,29 @@ impl FrameStack {
 }
 
 // first one is label type,
-type LabelEntry = (String, Vec<(String, String)>);
+type LabelEntry = (String, LabelData);
+
+// the original seems to abuse python's type system to create this,
+// ideally I'd use a real AST
+enum LabelData {
+    Ap(Assertion),
+    Ef(Statement),
+}
 struct MM {
     fs: FrameStack,
     labels: HashMap<String, LabelEntry>,
-    begin_label: String,
+    begin_label: Option<String>,
     stop_label: String,
 }
+use crate::LabelData::Ef;
+use crate::LabelData::Ap;
 
 impl MM {
     fn new(begin_label: String, stop_label: String) -> MM {
         MM {
             fs: FrameStack::default(),
             labels: HashMap::new(),
-            begin_label,
+            begin_label: Some(begin_label),
             stop_label,
         }
     }
@@ -278,7 +285,7 @@ impl MM {
     fn read(&mut self, toks: &mut Tokens) {
         self.fs.push();
         let mut label: Option<String> = None;
-        let tok = toks.read_comment();
+        let mut tok = toks.read_comment();
         loop {
             match tok.as_deref() {
                 Some("$}") => break,
@@ -305,7 +312,8 @@ impl MM {
 
                     println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
                     self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.into());
-                    self.labels.insert(label_u.to_string(), ("$f".to_string(), vec![(stat[0].clone(), stat[1].clone())]));
+                    let data = Ef(vec![stat[0].clone(), stat[1].clone()]);
+                    self.labels.insert(label_u.to_string(), ("$f".to_string(), data));
                     label = None;
                 }
                 Some("$a") => {
@@ -313,16 +321,65 @@ impl MM {
                     if label.is_none() {
                         panic!("$a must hae label")
                     }
-
-                    let _label_u = &label1.unwrap();
+                    let label_u = &label1.unwrap();
+                    if label_u == &self.stop_label {
+                        panic!("exit"); // I don't understad why you would want to exit
+                        //
+                    }
+                    let data = Ap(self.fs.make_assertion(toks.readstat()));
+                    self.labels.insert(label_u.to_string(), ("$a".to_string(), data));
                 }
-                Some(_) => {}
+
+                Some("$e") => {
+                    let label = label.clone().expect("e must have label");
+
+                    let stat = toks.readstat();
+                    self.fs.add_e(stat.clone(), label.clone());
+                    let data = Ef(stat);
+                    self.labels.insert(label, ("$p".to_string(), data));
+                }
+                Some("$p") => {
+                    let label_u = label.clone().expect("$p must have elabel");
+                    if label_u == self.stop_label {
+                        std::process::exit(0);
+                    }
+                    let stat = toks.readstat();
+                    let i = stat.iter().position(|x| x == "$=").expect("Mmust have $=");
+                    let proof = &stat[i + 1..].to_vec();
+                    let stat = &stat[..i];
+
+
+                    if self.begin_label.is_some() && &label_u == self.begin_label.as_ref().unwrap() {
+                        self.begin_label = None;
+                    }
+                    if self.begin_label.is_none() {
+                        println!("verifying {}", label_u);
+                        self.verify(label_u.clone(), stat.to_vec(), proof.to_vec());
+                    }
+                    let data = Ap(self.fs.make_assertion(stat.to_vec()));
+                    self.labels.insert(label_u, ("$p".to_string(), data));
+                    label = None;
+                }
+                Some("$d") => {
+                    self.fs.add_d(toks.readstat());
+                }
+                Some("${") => {
+                    self.read(toks);
+                }
+                Some(x) => if !x.starts_with("$") {
+                    label = tok;
+                }
+                Some(_) => {
+                    print!("tok {:?}", tok);
+
+                }
                 None => break,
             }
+            tok = toks.read_comment();
 
 
         }
-
+        self.fs.list.pop();
         
 
     }
