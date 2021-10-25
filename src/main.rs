@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, ops::Index, os::unix::process};
+use std::{collections::{HashMap, HashSet, VecDeque}};
 use std::fs::File;
 use std::io::BufReader;
 use std::cmp::min;
@@ -410,9 +410,9 @@ impl MM {
 
     fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
 
-        let Assertion { dvs: dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: stat }  = self.fs.make_assertion(stat);
+        let Assertion { dvs: _dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: _ }  = self.fs.make_assertion(stat);
 
-        let mand_hyps = mand_hyp_stmnts.iter().map(|(k, v)| self.fs.lookup_f(v.to_string()));
+        let mand_hyps = mand_hyp_stmnts.iter().map(|(_k, v)| self.fs.lookup_f(v.to_string()));
 
         let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
 
@@ -437,11 +437,11 @@ impl MM {
             if ch == 'Z' {
                 proof_ints.push(-1); //change this to option instead of this hack
             } else if 'A' <= ch && ch <= 'T' {
-                cur_int = (20 * cur_int + (ch as i32 - 'A' as i32 + 1) as i32);
+                cur_int = 20 * cur_int + (ch as i32 - 'A' as i32 + 1) as i32;
                 proof_ints.push(cur_int - 1);
                 cur_int = 0;
             } else if 'U' <= ch && ch <= 'Y' {
-                cur_int = (5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32);
+                cur_int = 5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32;
             }
         }
 
@@ -465,10 +465,10 @@ impl MM {
                 let step = &self.labels[&labels[pf_int as usize]];
 
 
-                let (step_type, step_data) = step;
+                let (_step_type, step_data) = step;
 
                 match step_data {
-                    Ap(Assertion {dvs : sd, f_hyps: svars, e_hyps: shyps, stat: sresult}) => {
+                    Ap(Assertion {dvs : _sd, f_hyps: svars, e_hyps: shyps, stat: _sresult}) => {
                         let nhyps = shyps.len() + svars.len();
 
                         let new_prevpf : Vec<i32>;
