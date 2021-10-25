@@ -14,6 +14,13 @@ struct Tokens {
 
 type Statement = Vec<String>;
 impl Tokens {
+    fn new(lines: BufReader<File>) -> Tokens {
+        Tokens {
+            lines_buffer :  vec!(lines),
+            token_buffer : vec!(),
+            imported_files : HashSet::new(),
+        }
+    }
     fn read(&mut self) -> Option<String> {
         while self.token_buffer.is_empty() {
             let mut line = String::new();
@@ -54,7 +61,7 @@ impl Tokens {
 
                     if !self.imported_files.contains(&filename) {
                         self.lines_buffer
-                            .push(BufReader::new(File::open(filename.clone()).unwrap()));
+                            .push(BufReader::new(File::open(filename.clone()).expect("Failed to open file")));
                         self.imported_files.insert(filename);
                     }
                 }
@@ -183,11 +190,11 @@ impl FrameStack {
 
     }
 
-    fn lookup_c(&mut self, token: &str) -> bool {
+    fn lookup_c(&self, token: &str) -> bool {
         self.list.iter().rev().any(|fr| fr.c.contains(token))
     }
 
-    fn lookup_v(&mut self, token: &str) -> bool {
+    fn lookup_v(&self, token: &str) -> bool {
         self.list.iter().rev().any(|fr| fr.v.contains(token))
     }
 
@@ -259,6 +266,7 @@ type LabelEntry = (String, LabelData);
 
 // the original seems to abuse python's type system to create this,
 // ideally I'd use a real AST
+#[derive(Debug)]
 enum LabelData {
     Ap(Assertion),
     Ef(Statement),
@@ -267,18 +275,18 @@ struct MM {
     fs: FrameStack,
     labels: HashMap<String, LabelEntry>,
     begin_label: Option<String>,
-    stop_label: String,
+    stop_label: Option<String>,
 }
 use crate::LabelData::Ef;
 use crate::LabelData::Ap;
 
 impl MM {
-    fn new(begin_label: String, stop_label: String) -> MM {
+    fn new(begin_label: Option<String>, stop_label: Option<String>) -> MM {
         MM {
             fs: FrameStack::default(),
             labels: HashMap::new(),
-            begin_label: Some(begin_label),
-            stop_label,
+            begin_label: begin_label,
+            stop_label: stop_label ,
         }
     }
 
@@ -301,33 +309,29 @@ impl MM {
                 }
                 Some("$f") => {
                     let stat = toks.readstat();
-                    let label1 = label.clone(); //I'll figure it out later I promise
-                    if label1.is_none() {
-                        panic!("$f must have label");
-                    }
+                    let label_u = label.expect("$f must have a label");
                     if stat.len() != 2 {
                         panic!("$f must have length 2");
                     }
-                    let label_u = &label1.unwrap(); //wow I'm bad
 
                     println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
-                    self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.into());
+                    self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
                     let data = Ef(vec![stat[0].clone(), stat[1].clone()]);
                     self.labels.insert(label_u.to_string(), ("$f".to_string(), data));
                     label = None;
                 }
                 Some("$a") => {
-                    let label1 = label.clone(); //I'll figure it out later I promise
-                    if label.is_none() {
-                        panic!("$a must hae label")
+                    let label_u = label.expect("$a must have a label");
+                    match &self.stop_label {
+                        Some(a) if a == &label_u => {
+                            std::process::exit(0)
+                        }
+                        _ => {}
                     }
-                    let label_u = &label1.unwrap();
-                    if label_u == &self.stop_label {
-                        panic!("exit"); // I don't understad why you would want to exit
-                        //
-                    }
+
                     let data = Ap(self.fs.make_assertion(toks.readstat()));
                     self.labels.insert(label_u.to_string(), ("$a".to_string(), data));
+                    label = None;
                 }
 
                 Some("$e") => {
@@ -340,7 +344,7 @@ impl MM {
                 }
                 Some("$p") => {
                     let label_u = label.clone().expect("$p must have elabel");
-                    if label_u == self.stop_label {
+                    if label == self.stop_label {
                         std::process::exit(0);
                     }
                     let stat = toks.readstat();
@@ -366,7 +370,7 @@ impl MM {
                 Some("${") => {
                     self.read(toks);
                 }
-                Some(x) => if !x.starts_with('$') {
+                Some(x) if !x.starts_with('$') =>  {
                     label = tok;
                 }
                 Some(_) => {
@@ -384,24 +388,24 @@ impl MM {
 
     }
 
-    fn apply_subst(&mut self, stat: Statement, subst: HashMap<String, Statement> ) -> Statement {
+    fn apply_subst(&self, stat: &Statement, subst: &HashMap<String, Statement> ) -> Statement {
         let mut result = vec![];
 
         for tok in stat {
-            if subst.contains_key(&tok) {
-                result.extend(subst[&tok].clone()); //very bad again
+            if subst.contains_key(tok.as_str()) {
+                result.extend(subst[tok.as_str()].clone()); //very bad again
             } else {
-                result.push(tok);
+                result.push(tok.to_string());
             }
         }
         result
     }
 
-    fn find_vars(&mut self, stat: Statement) -> Vec<String>{
-        let mut vars = vec!();
+    fn find_vars(&self, stat: &Statement) -> Vec<String>{
+        let mut vars: Vec<String> = vec!();
         for x in stat {
             if !vars.contains(&x) && self.fs.lookup_v(&x) {
-                vars.push(x);
+                vars.push(x.to_owned());
             }
         }
 
@@ -497,14 +501,95 @@ impl MM {
 
     }
 
-    fn verify(&mut self, _stat_label: String, _stat: Statement, _proof: Vec<String>) {
-        todo!();
+    fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Vec<String>) {
+        let mut stack : Vec<Statement> = vec!();
+        let stat_type = stat[0].clone();
+        if proof[0] == "(" {
+            proof = self.decompress_proof(stat.clone(), proof);
+        }
+
+        for label in proof {
+            let (steptyp, stepdat) = &self.labels[&label];
+            println!("{:?} : {:?}", label, self.labels[&label]);
+
+            match stepdat {
+                Ap(Assertion {dvs: distinct, f_hyps: mand_var, e_hyps: hyp, stat: result}) => {
+                    println!("{:?}", stepdat);
+                    let npop = mand_var.len() + hyp.len();
+                    let sp = stack.len() - npop;
+                    if stack.len() < npop {
+                        panic!("stack underflow")
+                    }
+                    let mut sp = sp as usize;
+                    let mut subst = HashMap::<String, Statement>::new();
+
+                    for (k, v) in mand_var {
+                        let entry: Statement = stack[sp].clone();
+
+                        if &entry[0] != k {
+                            panic!("stack entry doesn't match mandatry var hypothess");
+                        }
+
+                        subst.insert(v.to_string(), entry[1..].to_vec());
+                        sp += 1;
+                    }
+                    println!("subst: {:?}", subst);
+
+                    for (x, y) in distinct {
+                        println!("dist {:?} {:?} {:?} {:?}", x, y, subst[x], subst[y]);
+                        let x_vars = self.find_vars(&subst[x]);
+                        let y_vars = self.find_vars(&subst[y]);
+
+                        println!("V(x) = {:?}", x_vars);
+                        println!("V(y) = {:?}", y_vars);
+
+                        for x in &x_vars {
+                            for y in &y_vars {
+                                if x == y || !self.fs.lookup_d(x.to_string(), y.to_string()) {
+                                    panic!("Disjoint violation");
+                                }
+                            }
+                        }
+
+                        for h in hyp {
+                            let entry = &stack[sp];
+                            let subst_h = self.apply_subst(&h.to_vec(), &subst);
+                            if entry != &subst_h {
+                                panic!("Stack entry doesn't match hypothesis")
+                            }
+                            sp += 1;
+                        }
+
+                        stack.drain(stack.len() - npop..);
+                        stack.push(self.apply_subst(&result, &subst));
+
+                    }
+                }
+                Ef(x) => {
+                    stack.push(x.to_vec());
+                },
+            }
+            println!("st: {:?}", stack);
+
+        }
+        if stack.len() != 1 {
+            panic!("stack has anentry greater than >1 at end")
+        }
+        if stack[0] != stat {
+            panic!("assertion proved doesn't match ")
+        }
     }
 
     fn dump(&mut self) {
-        todo!();
+        println!("{:?}", self.labels);
     }
 }
 fn main() {
     println!("Hello, world!");
+
+    let args : Vec<String> = std::env::args().collect();
+    let mut mm = MM::new(args.get(1).cloned(), args.get(1).cloned());
+
+    let file = File::open(args[0].clone()).expect("Failed to find file");
+    mm.read(&mut Tokens::new(BufReader::new(file)));
 }
