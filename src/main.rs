@@ -1,10 +1,9 @@
-use std::{collections::{HashMap, HashSet, VecDeque}};
-use std::fs::File;
-use std::io::BufReader;
-use std::cmp::min;
 use std::cmp::max;
+use std::cmp::min;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs::File;
 use std::io::BufRead;
-
+use std::io::BufReader;
 
 #[derive(Debug)]
 struct Tokens {
@@ -17,9 +16,9 @@ type Statement = Vec<String>;
 impl Tokens {
     fn new(lines: BufReader<File>) -> Tokens {
         Tokens {
-            lines_buffer :  vec!(lines),
-            token_buffer : vec!(),
-            imported_files : HashSet::new(),
+            lines_buffer: vec![lines],
+            token_buffer: vec![],
+            imported_files: HashSet::new(),
         }
     }
     fn read(&mut self) -> Option<String> {
@@ -36,7 +35,6 @@ impl Tokens {
                     // println!("Read {} lines ", num);
                     self.token_buffer = line.split_whitespace().map(|x| x.into()).collect();
                     self.token_buffer.reverse();
-
                 }
                 _ => {
                     // println!("Done with file");
@@ -44,7 +42,6 @@ impl Tokens {
                     if self.lines_buffer.is_empty() {
                         return None;
                     }
-
                 }
             }
             // println!("Created token buffer {:?}", self.token_buffer);
@@ -58,8 +55,6 @@ impl Tokens {
         let mut token = self.read();
         // println!("In read file found token {:?}", token);
         loop {
-
-
             match token.as_deref() {
                 Some("$[") => {
                     let filename = self.read().expect("Couldn't find filename");
@@ -73,8 +68,9 @@ impl Tokens {
                     if !self.imported_files.contains(&filename) {
                         // println!("Found new file {}", &filename);
 
-                        self.lines_buffer
-                            .push(BufReader::new(File::open(filename.clone()).expect("Failed to open file")));
+                        self.lines_buffer.push(BufReader::new(
+                            File::open(filename.clone()).expect("Failed to open file"),
+                        ));
                         self.imported_files.insert(filename);
                     }
                 }
@@ -95,21 +91,19 @@ impl Tokens {
             // println!("In read comment: found token to be {:?}", token);
             match &token {
                 None => return None,
-                Some(x) if x == "$(" => {
-                    loop {
-                        match token.as_deref() {
-                            Some("$)") => break,
-                            _ => token = self.read(),
-                        }
+                Some(x) if x == "$(" => loop {
+                    match token.as_deref() {
+                        Some("$)") => break,
+                        _ => token = self.read(),
                     }
-                }
+                },
                 _ => return token,
             }
         }
     }
 
     fn readstat(&mut self) -> Statement {
-        let mut stat = vec!();
+        let mut stat = vec![];
         let mut token = self.read_comment().unwrap();
 
         // println!("In read stat, found token to be {:?}", token);
@@ -135,7 +129,6 @@ struct Frame {
 #[derive(Default, Debug)]
 struct FrameStack {
     list: Vec<Frame>,
-
 }
 
 #[derive(Default, Debug)]
@@ -196,7 +189,6 @@ impl FrameStack {
 
         frame.e.push(stat.clone());
         frame.e_labels.insert(stat, label);
-
     }
 
     fn add_d(&mut self, stat: Statement) {
@@ -205,11 +197,12 @@ impl FrameStack {
         for x in &stat {
             for y in &stat {
                 if x != y {
-                    frame.d.insert((min(x.clone(), y.clone()), max(x.clone(), y.clone())));
+                    frame
+                        .d
+                        .insert((min(x.clone(), y.clone()), max(x.clone(), y.clone())));
                 }
             }
         }
-
     }
 
     fn lookup_c(&self, token: &str) -> bool {
@@ -220,49 +213,66 @@ impl FrameStack {
         self.list.iter().rev().any(|fr| fr.v.contains(token))
     }
 
-
     fn lookup_f(&self, var: String) -> String {
         // println!("lookup {}", var);
-        let f = self.list.iter().rev().find(|frame| frame.f_labels.contains_key(&var)).unwrap();
+        let f = self
+            .list
+            .iter()
+            .rev()
+            .find(|frame| frame.f_labels.contains_key(&var))
+            .unwrap();
 
         f.f_labels[&var].clone()
     }
 
-    fn lookup_d(&mut self, x: String, y: String ) -> bool {
-        self.list.iter().rev().any(|fr| fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone()))))
+    fn lookup_d(&mut self, x: String, y: String) -> bool {
+        self.list.iter().rev().any(|fr| {
+            fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone())))
+        })
     }
 
     fn lookup_e(&self, stmt: Statement) -> String {
-        let f = self.list.iter().rev().find(|frame| frame.e_labels.contains_key(&stmt)).expect("Bad e");
-
+        let f = self
+            .list
+            .iter()
+            .rev()
+            .find(|frame| frame.e_labels.contains_key(&stmt))
+            .expect("Bad e");
 
         f.e_labels[&stmt].clone()
     }
 
     fn make_assertion(&mut self, stat: Statement) -> Assertion {
-
         let _frame = self.list.last_mut().unwrap();
 
         let e_hyps: Vec<Statement> = self.list.iter().flat_map(|fr| fr.e.clone()).collect();
 
-
         let chained = e_hyps.iter().chain(std::iter::once(&stat));
 
-        let mut mand_vars : HashSet<&String> = chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
+        let mut mand_vars: HashSet<&String> =
+            chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
 
         // println!("ma: \n mand_vars: {:?}, ", mand_vars);
 
         // this is absolutely terrible.
         // Definetely needs to be redone
-        let cartesian : HashSet<(String, String)> = mand_vars.clone().
-            into_iter().flat_map(|x| mand_vars.clone().into_iter().map(move |y| (x.clone(), y.clone()))).collect();
+        let cartesian: HashSet<(String, String)> = mand_vars
+            .clone()
+            .into_iter()
+            .flat_map(|x| {
+                mand_vars
+                    .clone()
+                    .into_iter()
+                    .map(move |y| (x.clone(), y.clone()))
+            })
+            .collect();
 
-
-        let dvs : HashSet<(String, String)> = self.list.iter().
-            flat_map(|fr| fr.d.intersection(&cartesian)).cloned().collect();
-
-
-
+        let dvs: HashSet<(String, String)> = self
+            .list
+            .iter()
+            .flat_map(|fr| fr.d.intersection(&cartesian))
+            .cloned()
+            .collect();
 
         let mut f_hyps = VecDeque::new();
         self.list.iter().rev().for_each(|fr| {
@@ -275,16 +285,13 @@ impl FrameStack {
         });
         // println!("ma: \n dvs: {:?}, f: {:?}, e_hyps: {:?}, stat: {:?}", dvs, f_hyps, e_hyps, stat);
 
-                                   Assertion {
-                                         dvs,
-                                       f_hyps,
-                                       e_hyps,
-                                       stat,
-                                   }
-
+        Assertion {
+            dvs,
+            f_hyps,
+            e_hyps,
+            stat,
+        }
     }
-
-
 }
 
 // first one is label type,
@@ -303,8 +310,8 @@ struct MM {
     begin_label: Option<String>,
     stop_label: Option<String>,
 }
-use crate::LabelData::Ef;
 use crate::LabelData::Ap;
+use crate::LabelData::Ef;
 
 impl MM {
     fn new(begin_label: Option<String>, stop_label: Option<String>) -> MM {
@@ -312,7 +319,7 @@ impl MM {
             fs: FrameStack::default(),
             labels: HashMap::new(),
             begin_label,
-            stop_label ,
+            stop_label,
         }
     }
 
@@ -343,22 +350,23 @@ impl MM {
                     }
 
                     // println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
-                    self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
+                    self.fs
+                        .add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
                     let data = Ef(vec![stat[0].clone(), stat[1].clone()]);
-                    self.labels.insert(label_u.to_string(), ("$f".to_string(), data));
+                    self.labels
+                        .insert(label_u.to_string(), ("$f".to_string(), data));
                     label = None;
                 }
                 Some("$a") => {
                     let label_u = label.expect("$a must have a label");
                     match &self.stop_label {
-                        Some(a) if a == &label_u => {
-                            std::process::exit(0)
-                        }
+                        Some(a) if a == &label_u => std::process::exit(0),
                         _ => {}
                     }
 
                     let data = Ap(self.fs.make_assertion(toks.readstat()));
-                    self.labels.insert(label_u.to_string(), ("$a".to_string(), data));
+                    self.labels
+                        .insert(label_u.to_string(), ("$a".to_string(), data));
                     label = None;
                 }
 
@@ -380,8 +388,8 @@ impl MM {
                     let proof = &stat[i + 1..].to_vec();
                     let stat = &stat[..i];
 
-
-                    if self.begin_label.is_some() && &label_u == self.begin_label.as_ref().unwrap() {
+                    if self.begin_label.is_some() && &label_u == self.begin_label.as_ref().unwrap()
+                    {
                         self.begin_label = None;
                     }
                     if self.begin_label.is_none() {
@@ -398,25 +406,20 @@ impl MM {
                 Some("${") => {
                     self.read(toks);
                 }
-                Some(x) if !x.starts_with('$') =>  {
+                Some(x) if !x.starts_with('$') => {
                     label = tok;
                 }
                 Some(_) => {
                     // print!("tok {:?}", tok);
-
                 }
                 None => break,
             }
             tok = toks.read_comment();
-
-
         }
         self.fs.list.pop();
-        
-
     }
 
-    fn apply_subst(&self, stat: &Statement, subst: &HashMap<String, Statement> ) -> Statement {
+    fn apply_subst(&self, stat: &Statement, subst: &HashMap<String, Statement>) -> Statement {
         let mut result = vec![];
 
         for tok in stat {
@@ -429,8 +432,8 @@ impl MM {
         result
     }
 
-    fn find_vars(&self, stat: &Statement) -> Vec<String>{
-        let mut vars: Vec<String> = vec!();
+    fn find_vars(&self, stat: &Statement) -> Vec<String> {
+        let mut vars: Vec<String> = vec![];
         for x in stat {
             if !vars.contains(x) && self.fs.lookup_v(x) {
                 vars.push(x.to_owned());
@@ -443,11 +446,17 @@ impl MM {
     fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
         // println!("Statement {:?}", stat);
 
-
-        let Assertion { dvs: _dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: _ }  = self.fs.make_assertion(stat);
+        let Assertion {
+            dvs: _dm,
+            f_hyps: mand_hyp_stmnts,
+            e_hyps: hype_stmnts,
+            stat: _,
+        } = self.fs.make_assertion(stat);
         // println!("mand_hyps_stmnts {:?}", mand_hyp_stmnts);
 
-        let mand_hyps = mand_hyp_stmnts.iter().map(|(_k, v)| self.fs.lookup_f(v.to_string()));
+        let mand_hyps = mand_hyp_stmnts
+            .iter()
+            .map(|(_k, v)| self.fs.lookup_f(v.to_string()));
 
         let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
 
@@ -458,7 +467,10 @@ impl MM {
 
         let hyp_end = labels.len();
 
-        let ep = proof.iter().position(|x| x == ")").expect("Failed to find matching parthesis");
+        let ep = proof
+            .iter()
+            .position(|x| x == ")")
+            .expect("Failed to find matching parthesis");
 
         labels.extend((&proof[1..ep]).iter().cloned());
 
@@ -467,9 +479,8 @@ impl MM {
         // println!("Labels {:?}", labels);
         // println!("proof {}", compressed_proof);
 
-        let mut proof_ints : Vec<i32> = vec!();
+        let mut proof_ints: Vec<i32> = vec![];
         let mut cur_int = 0;
-
 
         for ch in compressed_proof.chars() {
             if ch == 'Z' {
@@ -487,9 +498,9 @@ impl MM {
         let label_end = labels.len();
         // println!("labels: {:?}", labels);
 
-        let mut decompressed_ints = vec!();
-        let mut subproofs = vec!();
-        let mut prev_proofs : Vec<Vec<i32>>= vec!(); //ideally change this to a usize
+        let mut decompressed_ints = vec![];
+        let mut subproofs = vec![];
+        let mut prev_proofs: Vec<Vec<i32>> = vec![]; //ideally change this to a usize
 
         for pf_int in &proof_ints {
             // println!("subproofs : {:?}", subproofs);
@@ -501,31 +512,40 @@ impl MM {
             } else if 0 <= pf_int && pf_int < (hyp_end as i32) {
                 prev_proofs.push(vec![pf_int]);
                 decompressed_ints.push(pf_int);
-            } else if hyp_end <= (pf_int as usize)  && (pf_int as usize) < label_end {
+            } else if hyp_end <= (pf_int as usize) && (pf_int as usize) < label_end {
                 decompressed_ints.push(pf_int);
 
                 let step = &self.labels[&labels[pf_int as usize]];
 
-
                 let (_step_type, step_data) = step;
 
                 match step_data {
-                    Ap(Assertion {dvs : _sd, f_hyps: svars, e_hyps: shyps, stat: _sresult}) => {
+                    Ap(Assertion {
+                        dvs: _sd,
+                        f_hyps: svars,
+                        e_hyps: shyps,
+                        stat: _sresult,
+                    }) => {
                         let nhyps = shyps.len() + svars.len();
 
-                        let new_prevpf : Vec<i32>;
+                        let new_prevpf: Vec<i32>;
                         if nhyps != 0 {
                             let new_index = prev_proofs.len() - nhyps;
-                            new_prevpf = prev_proofs[(new_index)..].iter().flatten().copied().chain(std::iter::once(pf_int)).collect();
+                            new_prevpf = prev_proofs[(new_index)..]
+                                .iter()
+                                .flatten()
+                                .copied()
+                                .chain(std::iter::once(pf_int))
+                                .collect();
                             prev_proofs = prev_proofs[..new_index].to_vec();
                         } else {
                             new_prevpf = vec![pf_int];
                         }
                         prev_proofs.push(new_prevpf)
                     }
-                    _ => {prev_proofs.push(vec![pf_int])}
+                    _ => prev_proofs.push(vec![pf_int]),
                 }
-            } else if label_end as i32 <= pf_int  {
+            } else if label_end as i32 <= pf_int {
                 // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
                 let pf = &subproofs[(pf_int as usize) - label_end];
                 // println!("expanded subpf {:?}", pf);
@@ -536,12 +556,14 @@ impl MM {
 
         // println!("decompressed ints: {:?}", decompressed_ints);
 
-        return decompressed_ints.iter().map(|i| labels[*i as usize].clone()).collect(); //fix the clone
-
+        return decompressed_ints
+            .iter()
+            .map(|i| labels[*i as usize].clone())
+            .collect(); //fix the clone
     }
 
     fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Vec<String>) {
-        let mut stack : Vec<Statement> = vec!();
+        let mut stack: Vec<Statement> = vec![];
         let _stat_type = stat[0].clone();
         if proof[0] == "(" {
             proof = self.decompress_proof(stat.clone(), proof);
@@ -552,7 +574,12 @@ impl MM {
             // println!("{:?} : {:?}", label, self.labels[&label]);
 
             match stepdat {
-                Ap(Assertion {dvs: distinct, f_hyps: mand_var, e_hyps: hyp, stat: result}) => {
+                Ap(Assertion {
+                    dvs: distinct,
+                    f_hyps: mand_var,
+                    e_hyps: hyp,
+                    stat: result,
+                }) => {
                     // println!("{:?}", stepdat);
                     // println!("stack: {:?}", stack);
                     let npop = mand_var.len() + hyp.len();
@@ -593,8 +620,6 @@ impl MM {
                                 }
                             }
                         }
-
-
                     }
                     for h in hyp {
                         let entry = &stack[sp];
@@ -613,10 +638,9 @@ impl MM {
                 }
                 Ef(x) => {
                     stack.push(x.to_vec());
-                },
+                }
             }
             // // // // println!("st: {:?}", stack);
-
         }
         if stack.len() != 1 {
             panic!("stack has anentry greater than >1 at end")
@@ -633,7 +657,7 @@ impl MM {
 fn main() {
     // println!("Starting proof verification");
 
-    let args : Vec<String> = std::env::args().collect();
+    let args: Vec<String> = std::env::args().collect();
 
     // println!("Got cmd argumnets {:?}", args);
 
