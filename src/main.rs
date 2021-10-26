@@ -554,8 +554,11 @@ impl MM {
             match stepdat {
                 Ap(Assertion {dvs: distinct, f_hyps: mand_var, e_hyps: hyp, stat: result}) => {
                     println!("{:?}", stepdat);
+                    println!("stack: {:?}", stack);
                     let npop = mand_var.len() + hyp.len();
+                    println!("stacklength {:?}, ", stack.len());
                     let sp = stack.len() - npop;
+                    println!("npop {:?}, sp {:?}", npop, sp);
                     if stack.len() < npop {
                         panic!("stack underflow")
                     }
@@ -564,6 +567,7 @@ impl MM {
 
                     for (k, v) in mand_var {
                         let entry: Statement = stack[sp].clone();
+                        println!("Before checking if equal {:?} : {:?} with sp {:?}", &entry[0], k, sp);
 
                         if &entry[0] != k {
                             panic!("stack entry doesn't match mandatry var hypothess");
@@ -590,19 +594,22 @@ impl MM {
                             }
                         }
 
-                        for h in hyp {
-                            let entry = &stack[sp];
-                            let subst_h = self.apply_subst(&h.to_vec(), &subst);
-                            if entry != &subst_h {
-                                panic!("Stack entry doesn't match hypothesis")
-                            }
-                            sp += 1;
-                        }
-
-                        stack.drain(stack.len() - npop..);
-                        stack.push(self.apply_subst(result, &subst));
 
                     }
+                    for h in hyp {
+                        let entry = &stack[sp];
+                        let subst_h = self.apply_subst(&h.to_vec(), &subst);
+                        if entry != &subst_h {
+                            panic!("Stack entry doesn't match hypothesis")
+                        }
+                        sp += 1;
+                    }
+
+                    println!("stack: {:?}", stack);
+                    stack.drain(stack.len() - npop..);
+                    println!("stack: {:?}", stack);
+                    stack.push(self.apply_subst(result, &subst));
+                    println!("stack: {:?}", stack);
                 }
                 Ef(x) => {
                     stack.push(x.to_vec());
