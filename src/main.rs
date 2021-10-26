@@ -23,23 +23,23 @@ impl Tokens {
         }
     }
     fn read(&mut self) -> Option<String> {
-        println!("inside read function with state {:?}", self);
+        // println!("inside read function with state {:?}", self);
         while self.token_buffer.is_empty() {
-            println!("Buffer is empty, refilling");
+            //println!("Buffer is empty, refilling");
             let mut line = String::new();
             // pretend this succeeeds
             let result = self.lines_buffer.last_mut().unwrap().read_line(&mut line);
-            println!("Read line: {}", line);
+            // println!("Read line: {}", line);
 
             match result {
                 Ok(num) if num > 0 => {
-                    println!("Read {} lines ", num);
+                    // println!("Read {} lines ", num);
                     self.token_buffer = line.split_whitespace().map(|x| x.into()).collect();
                     self.token_buffer.reverse();
 
                 }
                 _ => {
-                    println!("Done with file");
+                    // println!("Done with file");
                     self.lines_buffer.pop();
                     if self.lines_buffer.is_empty() {
                         return None;
@@ -47,16 +47,16 @@ impl Tokens {
 
                 }
             }
-            println!("Created token buffer {:?}", self.token_buffer);
+            // println!("Created token buffer {:?}", self.token_buffer);
         }
         self.token_buffer.pop()
     }
 
     fn read_file(&mut self) -> Option<String> {
-        println!("reading file");
+        // println!("reading file");
 
         let mut token = self.read();
-        println!("In read file found token {:?}", token);
+        // println!("In read file found token {:?}", token);
         loop {
 
 
@@ -65,13 +65,13 @@ impl Tokens {
                     let filename = self.read().expect("Couldn't find filename");
                     let endbracket = self.read().expect("Coludn't find end bracket");
 
-                    println!("In read file found filename: {:?}, endbracket: {:?}", filename, endbracket);
+                    // println!("In read file found filename: {:?}, endbracket: {:?}", filename, endbracket);
                     if endbracket != "$]" {
                         panic!("End bracket not found");
                     }
 
                     if !self.imported_files.contains(&filename) {
-                        println!("Found new file {}", &filename);
+                        // println!("Found new file {}", &filename);
 
                         self.lines_buffer
                             .push(BufReader::new(File::open(filename.clone()).expect("Failed to open file")));
@@ -88,11 +88,11 @@ impl Tokens {
     }
 
     fn read_comment(&mut self) -> Option<String> {
-        println!("reading comment");
+        // println!("reading comment");
 
         loop {
             let mut token = self.read_file();
-            println!("In read comment: found token to be {:?}", token);
+            // println!("In read comment: found token to be {:?}", token);
             match &token {
                 None => return None,
                 Some(x) if x == "$(" => {
@@ -112,7 +112,7 @@ impl Tokens {
         let mut stat = vec!();
         let mut token = self.read_comment().unwrap();
 
-        println!("In read stat, found token to be {:?}", token);
+        // println!("In read stat, found token to be {:?}", token);
         while token != "$." {
             stat.push(token);
             token = self.read_comment().expect("EOF before $.");
@@ -222,7 +222,7 @@ impl FrameStack {
 
 
     fn lookup_f(&self, var: String) -> String {
-        println!("lookup {}", var);
+        // println!("lookup {}", var);
         let f = self.list.iter().rev().find(|frame| frame.f_labels.contains_key(&var)).unwrap();
 
         f.f_labels[&var].clone()
@@ -250,7 +250,7 @@ impl FrameStack {
 
         let mut mand_vars : HashSet<&String> = chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
 
-        println!("ma: \n mand_vars: {:?}, ", mand_vars);
+        // println!("ma: \n mand_vars: {:?}, ", mand_vars);
 
         // this is absolutely terrible.
         // Definetely needs to be redone
@@ -273,7 +273,7 @@ impl FrameStack {
                 }
             });
         });
-        println!("ma: \n dvs: {:?}, f: {:?}, e_hyps: {:?}, stat: {:?}", dvs, f_hyps, e_hyps, stat);
+        // println!("ma: \n dvs: {:?}, f: {:?}, e_hyps: {:?}, stat: {:?}", dvs, f_hyps, e_hyps, stat);
 
                                    Assertion {
                                          dvs,
@@ -317,11 +317,11 @@ impl MM {
     }
 
     fn read(&mut self, toks: &mut Tokens) {
-        println!("Starting function read");
+        // println!("Starting function read");
         self.fs.push();
         let mut label: Option<String> = None;
         let mut tok = toks.read_comment();
-        println!("In MM read, found token to be {:?}", tok);
+        // println!("In MM read, found token to be {:?}", tok);
         loop {
             match tok.as_deref() {
                 Some("$}") => break,
@@ -342,7 +342,7 @@ impl MM {
                         panic!("$f must have length 2");
                     }
 
-                    println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
+                    // println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
                     self.fs.add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
                     let data = Ef(vec![stat[0].clone(), stat[1].clone()]);
                     self.labels.insert(label_u.to_string(), ("$f".to_string(), data));
@@ -402,7 +402,7 @@ impl MM {
                     label = tok;
                 }
                 Some(_) => {
-                    print!("tok {:?}", tok);
+                    // print!("tok {:?}", tok);
 
                 }
                 None => break,
@@ -441,20 +441,20 @@ impl MM {
     }
 
     fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
-        println!("Statement {:?}", stat);
+        // println!("Statement {:?}", stat);
 
 
         let Assertion { dvs: _dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: _ }  = self.fs.make_assertion(stat);
-        println!("mand_hyps_stmnts {:?}", mand_hyp_stmnts);
+        // println!("mand_hyps_stmnts {:?}", mand_hyp_stmnts);
 
         let mand_hyps = mand_hyp_stmnts.iter().map(|(_k, v)| self.fs.lookup_f(v.to_string()));
 
         let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
 
-        println!("mand_hyps {:?}", mand_hyps);
-        println!("hyps {:?}", hyps);
+        // println!("mand_hyps {:?}", mand_hyps);
+        // println!("hyps {:?}", hyps);
         let mut labels: Vec<String> = mand_hyps.chain(hyps).collect();
-        println!("Labels {:?}", labels);
+        // println!("Labels {:?}", labels);
 
         let hyp_end = labels.len();
 
@@ -464,8 +464,8 @@ impl MM {
 
         let compressed_proof = proof[ep + 1..].join("");
 
-        println!("Labels {:?}", labels);
-        println!("proof {}", compressed_proof);
+        // println!("Labels {:?}", labels);
+        // println!("proof {}", compressed_proof);
 
         let mut proof_ints : Vec<i32> = vec!();
         let mut cur_int = 0;
@@ -482,18 +482,18 @@ impl MM {
                 cur_int = 5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32;
             }
         }
-        println!("proof_ints: {:?}", proof_ints);
+        // println!("proof_ints: {:?}", proof_ints);
 
         let label_end = labels.len();
-        println!("labels: {:?}", labels);
+        // println!("labels: {:?}", labels);
 
         let mut decompressed_ints = vec!();
         let mut subproofs = vec!();
         let mut prev_proofs : Vec<Vec<i32>>= vec!(); //ideally change this to a usize
 
         for pf_int in &proof_ints {
-            println!("subproofs : {:?}", subproofs);
-            println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
+            // println!("subproofs : {:?}", subproofs);
+            // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
 
             let pf_int = *pf_int;
             if pf_int == -1 {
@@ -526,15 +526,15 @@ impl MM {
                     _ => {prev_proofs.push(vec![pf_int])}
                 }
             } else if label_end as i32 <= pf_int  {
-                println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
+                // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
                 let pf = &subproofs[(pf_int as usize) - label_end];
-                println!("expanded subpf {:?}", pf);
+                // println!("expanded subpf {:?}", pf);
                 decompressed_ints.extend(pf);
                 prev_proofs.push(pf.to_vec());
             }
         }
 
-        println!("decompressed ints: {:?}", decompressed_ints);
+        // println!("decompressed ints: {:?}", decompressed_ints);
 
         return decompressed_ints.iter().map(|i| labels[*i as usize].clone()).collect(); //fix the clone
 
@@ -549,16 +549,16 @@ impl MM {
 
         for label in proof {
             let (_steptyp, stepdat) = &self.labels[&label];
-            println!("{:?} : {:?}", label, self.labels[&label]);
+            // println!("{:?} : {:?}", label, self.labels[&label]);
 
             match stepdat {
                 Ap(Assertion {dvs: distinct, f_hyps: mand_var, e_hyps: hyp, stat: result}) => {
-                    println!("{:?}", stepdat);
-                    println!("stack: {:?}", stack);
+                    // println!("{:?}", stepdat);
+                    // println!("stack: {:?}", stack);
                     let npop = mand_var.len() + hyp.len();
-                    println!("stacklength {:?}, ", stack.len());
+                    // println!("stacklength {:?}, ", stack.len());
                     let sp = stack.len() - npop;
-                    println!("npop {:?}, sp {:?}", npop, sp);
+                    // println!("npop {:?}, sp {:?}", npop, sp);
                     if stack.len() < npop {
                         panic!("stack underflow")
                     }
@@ -567,7 +567,7 @@ impl MM {
 
                     for (k, v) in mand_var {
                         let entry: Statement = stack[sp].clone();
-                        println!("Before checking if equal {:?} : {:?} with sp {:?}", &entry[0], k, sp);
+                        // println!("Before checking if equal {:?} : {:?} with sp {:?}", &entry[0], k, sp);
 
                         if &entry[0] != k {
                             panic!("stack entry doesn't match mandatry var hypothess");
@@ -576,15 +576,15 @@ impl MM {
                         subst.insert(v.to_string(), entry[1..].to_vec());
                         sp += 1;
                     }
-                    println!("subst: {:?}", subst);
+                    // println!("subst: {:?}", subst);
 
                     for (x, y) in distinct {
-                        println!("dist {:?} {:?} {:?} {:?}", x, y, subst[x], subst[y]);
+                        // println!("dist {:?} {:?} {:?} {:?}", x, y, subst[x], subst[y]);
                         let x_vars = self.find_vars(&subst[x]);
                         let y_vars = self.find_vars(&subst[y]);
 
-                        println!("V(x) = {:?}", x_vars);
-                        println!("V(y) = {:?}", y_vars);
+                        // println!("V(x) = {:?}", x_vars);
+                        // println!("V(y) = {:?}", y_vars);
 
                         for x in &x_vars {
                             for y in &y_vars {
@@ -605,17 +605,17 @@ impl MM {
                         sp += 1;
                     }
 
-                    println!("stack: {:?}", stack);
+                    // println!("stack: {:?}", stack);
                     stack.drain(stack.len() - npop..);
-                    println!("stack: {:?}", stack);
+                    // println!("stack: {:?}", stack);
                     stack.push(self.apply_subst(result, &subst));
-                    println!("stack: {:?}", stack);
+                    // println!("stack: {:?}", stack);
                 }
                 Ef(x) => {
                     stack.push(x.to_vec());
                 },
             }
-            println!("st: {:?}", stack);
+            // // // // println!("st: {:?}", stack);
 
         }
         if stack.len() != 1 {
@@ -627,20 +627,20 @@ impl MM {
     }
 
     fn dump(&mut self) {
-        println!("{:?}", self.labels);
+        // println!("{:?}", self.labels);
     }
 }
 fn main() {
-    println!("Starting proof verification");
+    // println!("Starting proof verification");
 
     let args : Vec<String> = std::env::args().collect();
 
-    println!("Got cmd argumnets {:?}", args);
+    // println!("Got cmd argumnets {:?}", args);
 
     let mut mm = MM::new(args.get(2).cloned(), args.get(3).cloned());
 
     let file = File::open(args[1].clone()).expect("Failed to find file");
-    println!("Found file name {:?}", args[1]);
+    // println!("Found file name {:?}", args[1]);
     mm.read(&mut Tokens::new(BufReader::new(file)));
     mm.dump();
 }
