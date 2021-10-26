@@ -55,7 +55,7 @@ impl Tokens {
     fn read_file(&mut self) -> Option<String> {
         println!("reading file");
 
-        let token = self.read();
+        let mut token = self.read();
         println!("In read file found token {:?}", token);
         loop {
 
@@ -65,6 +65,7 @@ impl Tokens {
                     let filename = self.read().expect("Couldn't find filename");
                     let endbracket = self.read().expect("Coludn't find end bracket");
 
+                    println!("In read file found filename: {:?}, endbracket: {:?}", filename, endbracket);
                     if endbracket != "$]" {
                         panic!("End bracket not found");
                     }
@@ -81,6 +82,7 @@ impl Tokens {
                     break;
                 }
             };
+            token = self.read();
         }
         token
     }
