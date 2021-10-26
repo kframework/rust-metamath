@@ -6,6 +6,7 @@ use std::cmp::max;
 use std::io::BufRead;
 
 
+#[derive(Debug)]
 struct Tokens {
     lines_buffer: Vec<BufReader<File>>,
     token_buffer: Vec<String>,
@@ -22,67 +23,85 @@ impl Tokens {
         }
     }
     fn read(&mut self) -> Option<String> {
+        println!("inside read function with state {:?}", self);
         while self.token_buffer.is_empty() {
+            println!("Buffer is empty, refilling");
             let mut line = String::new();
             // pretend this succeeeds
             let result = self.lines_buffer.last_mut().unwrap().read_line(&mut line);
+            println!("Read line: {}", line);
 
-             if let Ok(num) = result {
+            match result {
+                Ok(num) if num > 0 => {
+                    println!("Read {} lines ", num);
+                    self.token_buffer = line.split_whitespace().map(|x| x.into()).collect();
+                    self.token_buffer.reverse();
+
+                }
+                _ => {
+                    println!("Done with file");
                     self.lines_buffer.pop();
-                    if num == 0 {
-                        self.token_buffer = line.split_whitespace().map(|x| x.into()).collect();
-                        self.token_buffer.reverse();
-                    } else {
-                        self.lines_buffer.pop();
-                        if self.lines_buffer.is_empty() {
-                            return None;
-                        }
+                    if self.lines_buffer.is_empty() {
+                        return None;
                     }
 
+                }
             }
+            println!("Created token buffer {:?}", self.token_buffer);
         }
         self.token_buffer.pop()
     }
 
     fn read_file(&mut self) -> Option<String> {
+        println!("reading file");
 
+        let token = self.read();
+        println!("In read file found token {:?}", token);
         loop {
-            let token = self.read();
-            let input = token.filter(|x| x == "$[");
 
-            match input {
-                Some(_) => {
-                    let filename = self.read().unwrap();
-                    let endbracket = self.read().unwrap();
+
+            match token.as_deref() {
+                Some("$[") => {
+                    let filename = self.read().expect("Couldn't find filename");
+                    let endbracket = self.read().expect("Coludn't find end bracket");
 
                     if endbracket != "$]" {
-                        panic!();
+                        panic!("End bracket not found");
                     }
 
                     if !self.imported_files.contains(&filename) {
+                        println!("Found new file {}", &filename);
+
                         self.lines_buffer
                             .push(BufReader::new(File::open(filename.clone()).expect("Failed to open file")));
                         self.imported_files.insert(filename);
                     }
                 }
-                None => {
+                _ => {
                     break;
                 }
             };
         }
-        self.token_buffer.pop()
+        token
     }
 
     fn read_comment(&mut self) -> Option<String> {
-        loop {
-            let mut token = self.read_file()?;
+        println!("reading comment");
 
-            if token == "$(" {
-                while token != "$)" {
-                    token = self.read()?;
+        loop {
+            let mut token = self.read_file();
+            println!("In read comment: found token to be {:?}", token);
+            match &token {
+                None => return None,
+                Some(x) if x == "$(" => {
+                    loop {
+                        match token.as_deref() {
+                            Some("$)") => break,
+                            _ => token = self.read(),
+                        }
+                    }
                 }
-            } else {
-                return Some(token);
+                _ => return token,
             }
         }
     }
@@ -91,6 +110,7 @@ impl Tokens {
         let mut stat = vec!();
         let mut token = self.read_comment().unwrap();
 
+        println!("In read stat, found token to be {:?}", token);
         while token != "$." {
             stat.push(token);
             token = self.read_comment().expect("EOF before $.");
@@ -291,9 +311,11 @@ impl MM {
     }
 
     fn read(&mut self, toks: &mut Tokens) {
+        println!("Starting function read");
         self.fs.push();
         let mut label: Option<String> = None;
         let mut tok = toks.read_comment();
+        println!("In MM read, found token to be {:?}", tok);
         loop {
             match tok.as_deref() {
                 Some("$}") => break,
@@ -585,11 +607,15 @@ impl MM {
     }
 }
 fn main() {
-    println!("Hello, world!");
+    println!("Starting proof verification");
 
     let args : Vec<String> = std::env::args().collect();
-    let mut mm = MM::new(args.get(1).cloned(), args.get(1).cloned());
 
-    let file = File::open(args[0].clone()).expect("Failed to find file");
+    println!("Got cmd argumnets {:?}", args);
+
+    let mut mm = MM::new(args.get(2).cloned(), args.get(3).cloned());
+
+    let file = File::open(args[1].clone()).expect("Failed to find file");
+    println!("Found file name {:?}", args[1]);
     mm.read(&mut Tokens::new(BufReader::new(file)));
 }
