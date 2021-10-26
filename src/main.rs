@@ -222,6 +222,7 @@ impl FrameStack {
 
 
     fn lookup_f(&self, var: String) -> String {
+        println!("lookup {}", var);
         let f = self.list.iter().rev().find(|frame| frame.f_labels.contains_key(&var)).unwrap();
 
         f.f_labels[&var].clone()
@@ -239,17 +240,17 @@ impl FrameStack {
     }
 
     fn make_assertion(&mut self, stat: Statement) -> Assertion {
+
         let _frame = self.list.last_mut().unwrap();
 
         let e_hyps: Vec<Statement> = self.list.iter().flat_map(|fr| fr.e.clone()).collect();
 
-        let stat_vec = vec!(stat.clone());
 
-        let chained = e_hyps.iter().chain(stat_vec.iter());
-
+        let chained = e_hyps.iter().chain(std::iter::once(&stat));
 
         let mut mand_vars : HashSet<&String> = chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
 
+        println!("ma: \n mand_vars: {:?}, ", mand_vars);
 
         // this is absolutely terrible.
         // Definetely needs to be redone
@@ -261,15 +262,18 @@ impl FrameStack {
             flat_map(|fr| fr.d.intersection(&cartesian)).cloned().collect();
 
 
+
+
         let mut f_hyps = VecDeque::new();
         self.list.iter().rev().for_each(|fr| {
-            fr.f.iter().for_each(|(k, v)| {
+            fr.f.iter().rev().for_each(|(v, k)| {
                 if mand_vars.contains(&v) {
-                    mand_vars.remove(&v);
                     f_hyps.push_front((k.clone(), v.clone()));
+                    mand_vars.remove(&v);
                 }
             });
         });
+        println!("ma: \n dvs: {:?}, f: {:?}, e_hyps: {:?}, stat: {:?}", dvs, f_hyps, e_hyps, stat);
 
                                    Assertion {
                                          dvs,
@@ -437,14 +441,20 @@ impl MM {
     }
 
     fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
+        println!("Statement {:?}", stat);
+
 
         let Assertion { dvs: _dm, f_hyps: mand_hyp_stmnts, e_hyps: hype_stmnts, stat: _ }  = self.fs.make_assertion(stat);
+        println!("mand_hyps_stmnts {:?}", mand_hyp_stmnts);
 
         let mand_hyps = mand_hyp_stmnts.iter().map(|(_k, v)| self.fs.lookup_f(v.to_string()));
 
         let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
 
+        println!("mand_hyps {:?}", mand_hyps);
+        println!("hyps {:?}", hyps);
         let mut labels: Vec<String> = mand_hyps.chain(hyps).collect();
+        println!("Labels {:?}", labels);
 
         let hyp_end = labels.len();
 
@@ -472,22 +482,26 @@ impl MM {
                 cur_int = 5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32;
             }
         }
-
         println!("proof_ints: {:?}", proof_ints);
 
         let label_end = labels.len();
+        println!("labels: {:?}", labels);
 
         let mut decompressed_ints = vec!();
         let mut subproofs = vec!();
-        let mut prev_proofs : Vec<Vec<i32>>= vec!();
+        let mut prev_proofs : Vec<Vec<i32>>= vec!(); //ideally change this to a usize
 
         for pf_int in &proof_ints {
+            println!("subproofs : {:?}", subproofs);
+            println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
+
             let pf_int = *pf_int;
             if pf_int == -1 {
                 subproofs.push(prev_proofs.last().unwrap().clone());
-            } else if 0 <= pf_int && pf_int < hyp_end as i32 {
+            } else if 0 <= pf_int && pf_int < (hyp_end as i32) {
                 prev_proofs.push(vec![pf_int]);
-            } else if hyp_end <= pf_int as usize  && (pf_int as usize) < label_end {
+                decompressed_ints.push(pf_int);
+            } else if hyp_end <= (pf_int as usize)  && (pf_int as usize) < label_end {
                 decompressed_ints.push(pf_int);
 
                 let step = &self.labels[&labels[pf_int as usize]];
@@ -511,8 +525,9 @@ impl MM {
                     }
                     _ => {prev_proofs.push(vec![pf_int])}
                 }
-            } else if label_end <= pf_int as usize {
-                let pf = &subproofs[pf_int as usize - label_end];
+            } else if label_end as i32 <= pf_int  {
+                println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
+                let pf = &subproofs[(pf_int as usize) - label_end];
                 println!("expanded subpf {:?}", pf);
                 decompressed_ints.extend(pf);
                 prev_proofs.push(pf.to_vec());
@@ -620,4 +635,5 @@ fn main() {
     let file = File::open(args[1].clone()).expect("Failed to find file");
     println!("Found file name {:?}", args[1]);
     mm.read(&mut Tokens::new(BufReader::new(file)));
+    mm.dump();
 }
