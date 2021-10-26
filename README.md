@@ -18,3 +18,11 @@ Eventually custom operations will be included.
 Rust is a very fast language, and I do not like C and C++. 
 
 
+# Running
+
+Compile it with `cargo build --release`, the binary should be in `/target/release`
+
+Change to the correct directory then do `path/to/binary name-of-mm-file.mm`
+
+
+
