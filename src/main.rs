@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::rc::Rc;
 
 #[derive(Debug)]
 struct Tokens {
@@ -295,23 +296,22 @@ impl FrameStack {
 }
 
 // first one is label type,
-type LabelEntry = (String, LabelData);
 
+#[derive(Debug)]
+enum LabelEntry {
+    DollarA(Assertion),
+    DollarP(Assertion),
+    DollarE(Statement),
+    DollarF(Statement),
+}
 // the original seems to abuse python's type system to create this,
 // ideally I'd use a real AST
-#[derive(Debug)]
-enum LabelData {
-    Ap(Assertion),
-    Ef(Statement),
-}
 struct MM {
     fs: FrameStack,
-    labels: HashMap<String, LabelEntry>,
+    labels: HashMap<String, Rc<LabelEntry>>,
     begin_label: Option<String>,
     stop_label: Option<String>,
 }
-use crate::LabelData::Ap;
-use crate::LabelData::Ef;
 
 impl MM {
     fn new(begin_label: Option<String>, stop_label: Option<String>) -> MM {
@@ -352,9 +352,9 @@ impl MM {
                     // println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
                     self.fs
                         .add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
-                    let data = Ef(vec![stat[0].clone(), stat[1].clone()]);
+                    let data = LabelEntry::DollarF(vec![stat[0].clone(), stat[1].clone()]);
                     self.labels
-                        .insert(label_u.to_string(), ("$f".to_string(), data));
+                        .insert(label_u.to_string(), Rc::new(data));
                     label = None;
                 }
                 Some("$a") => {
@@ -364,9 +364,9 @@ impl MM {
                         _ => {}
                     }
 
-                    let data = Ap(self.fs.make_assertion(toks.readstat()));
+                    let data = LabelEntry::DollarA(self.fs.make_assertion(toks.readstat()));
                     self.labels
-                        .insert(label_u.to_string(), ("$a".to_string(), data));
+                        .insert(label_u.to_string(), Rc::new(data));
                     label = None;
                 }
 
@@ -375,8 +375,8 @@ impl MM {
 
                     let stat = toks.readstat();
                     self.fs.add_e(stat.clone(), label.clone());
-                    let data = Ef(stat);
-                    self.labels.insert(label, ("$p".to_string(), data));
+                    let data = LabelEntry::DollarE(stat);
+                    self.labels.insert(label, Rc::new(data));
                 }
                 Some("$p") => {
                     let label_u = label.clone().expect("$p must have elabel");
@@ -396,8 +396,8 @@ impl MM {
                         println!("verifying {}", label_u);
                         self.verify(label_u.clone(), stat.to_vec(), proof.to_vec());
                     }
-                    let data = Ap(self.fs.make_assertion(stat.to_vec()));
-                    self.labels.insert(label_u, ("$p".to_string(), data));
+                    let data = LabelEntry::DollarP(self.fs.make_assertion(stat.to_vec()));
+                    self.labels.insert(label_u, Rc::new(data));
                     label = None;
                 }
                 Some("$d") => {
@@ -517,10 +517,16 @@ impl MM {
 
                 let step = &self.labels[&labels[pf_int as usize]];
 
-                let (_step_type, step_data) = step;
+                let step_data = step;
 
-                match step_data {
-                    Ap(Assertion {
+
+                match &**step_data { //this seems wrong
+                    LabelEntry::DollarA(Assertion {
+                        dvs: _sd,
+                        f_hyps: svars,
+                        e_hyps: shyps,
+                        stat: _sresult,
+                    }) | LabelEntry::DollarP(Assertion {
                         dvs: _sd,
                         f_hyps: svars,
                         e_hyps: shyps,
@@ -570,16 +576,21 @@ impl MM {
         }
 
         for label in proof {
-            let (_steptyp, stepdat) = &self.labels[&label];
+            let stepdat = &self.labels[&label];
             // println!("{:?} : {:?}", label, self.labels[&label]);
 
-            match stepdat {
-                Ap(Assertion {
+            match &**stepdat {
+                LabelEntry::DollarA(Assertion {
                     dvs: distinct,
                     f_hyps: mand_var,
                     e_hyps: hyp,
                     stat: result,
-                }) => {
+                }) |  LabelEntry::DollarP(Assertion {
+                    dvs: distinct,
+                    f_hyps: mand_var,
+                    e_hyps: hyp,
+                    stat: result,
+                })=> {
                     // println!("{:?}", stepdat);
                     // println!("stack: {:?}", stack);
                     let npop = mand_var.len() + hyp.len();
@@ -633,11 +644,11 @@ impl MM {
                     // println!("stack: {:?}", stack);
                     stack.drain(stack.len() - npop..);
                     // println!("stack: {:?}", stack);
-                    stack.push(self.apply_subst(result, &subst));
+                    stack.push(self.apply_subst(&result, &subst));
                     // println!("stack: {:?}", stack);
                 }
-                Ef(x) => {
-                    stack.push(x.to_vec());
+                LabelEntry::DollarF(x) | LabelEntry::DollarE(x)=> {
+                    stack.push((*x).to_vec());
                 }
             }
             // // // // println!("st: {:?}", stack);
