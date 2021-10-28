@@ -60,9 +60,7 @@ impl Tokens {
 
         let mut token = self.read();
         // println!("In read file found token {:?}", token);
-        loop {
-            match token.as_deref() {
-                Some("$[") => {
+        while let Some("$[") = token.as_deref() {
                     let filename = self.read().expect("Couldn't find filename");
                     let endbracket = self.read().expect("Coludn't find end bracket");
 
@@ -79,11 +77,6 @@ impl Tokens {
                         ));
                         self.imported_files.insert(filename);
                     }
-                }
-                _ => {
-                    break;
-                }
-            };
             token = self.read();
         }
         token
@@ -512,7 +505,7 @@ impl MM {
                 None => {
                     subproofs.push(prev_proofs.last().unwrap().clone());
                 }
-                Some(i) if 0 <= *i && *i < hyp_end => {
+                Some(i) if *i < hyp_end => {
                     prev_proofs.push(vec![*i]);
                     decompressed_ints.push(*i);
                 }
