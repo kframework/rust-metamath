@@ -13,7 +13,12 @@ struct Tokens {
     imported_files: HashSet<String>,
 }
 
-type Statement = Vec<String>;
+//since statement may be used multiple times when applying substitution
+// use Rc
+type Statement = Rc<[LanguageToken]>; //may be better to newtype this but I guess it works for now
+
+type Proof = Vec<Label>; //I don't think a proof is used multiple times
+type Label = Rc<str>;
 impl Tokens {
     fn new(lines: BufReader<File>) -> Tokens {
         Tokens {
@@ -104,27 +109,29 @@ impl Tokens {
     }
 
     fn readstat(&mut self) -> Statement {
-        let mut stat = vec![];
-        let mut token = self.read_comment().unwrap();
+        let mut stat : Vec<Rc<str>> = vec![];
+        let mut token = self.read_comment().expect("Failed to read token in read stat");
 
         // println!("In read stat, found token to be {:?}", token);
         while token != "$." {
-            stat.push(token);
+            stat.push(token.into());
             token = self.read_comment().expect("EOF before $.");
         }
-        stat
+        stat.into()
     }
 }
 
+type LanguageToken = Rc<str>;
+
 #[derive(Default, Debug)]
 struct Frame {
-    c: HashSet<String>,
-    v: HashSet<String>,
-    d: HashSet<(String, String)>,
-    f: Vec<(String, String)>,
-    f_labels: HashMap<String, String>,
-    e: Vec<Vec<String>>,
-    e_labels: HashMap<Statement, String>,
+    c: HashSet<LanguageToken>,
+    v: HashSet<LanguageToken>,
+    d: HashSet<(LanguageToken, LanguageToken)>, //maybe switch this give c and v different types
+    f: Vec<(LanguageToken, LanguageToken)>,
+    f_labels: HashMap<LanguageToken, Label>,
+    e: Vec<Statement>,
+    e_labels: HashMap<Statement, Label>,
 }
 
 #[derive(Default, Debug)]
@@ -132,10 +139,10 @@ struct FrameStack {
     list: Vec<Frame>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct Assertion {
-    dvs: HashSet<(String, String)>,
-    f_hyps: VecDeque<(String, String)>,
+    dvs: HashSet<(LanguageToken, LanguageToken)>,
+    f_hyps: VecDeque<(LanguageToken, LanguageToken)>,
     e_hyps: Vec<Statement>,
     stat: Statement,
 }
@@ -145,7 +152,7 @@ impl FrameStack {
         self.list.push(Frame::default());
     }
 
-    fn add_c(&mut self, token: String) {
+    fn add_c(&mut self, token: LanguageToken) {
         let frame = &mut self.list.last_mut().unwrap();
 
         if frame.c.contains(&token) {
@@ -157,7 +164,7 @@ impl FrameStack {
         frame.c.insert(token);
     }
 
-    fn add_v(&mut self, token: String) {
+    fn add_v(&mut self, token: LanguageToken) {
         let frame = &mut self.list.last_mut().unwrap();
 
         if frame.c.contains(&token) {
@@ -169,7 +176,7 @@ impl FrameStack {
         frame.v.insert(token);
     }
 
-    fn add_f(&mut self, var: String, kind: String, label: String) {
+    fn add_f(&mut self, var: LanguageToken, kind: LanguageToken, label: Label) {
         if !self.lookup_v(&var) {
             panic!("var not defined")
         }
@@ -185,7 +192,7 @@ impl FrameStack {
         frame.f_labels.insert(var, label);
     }
 
-    fn add_e(&mut self, stat: Vec<String>, label: String) {
+    fn add_e(&mut self, stat: Statement, label: Label) {
         let frame = self.list.last_mut().unwrap();
 
         frame.e.push(stat.clone());
@@ -195,8 +202,8 @@ impl FrameStack {
     fn add_d(&mut self, stat: Statement) {
         let frame = self.list.last_mut().unwrap();
         //let mut product_vec = vec!();
-        for x in &stat {
-            for y in &stat {
+        for x in stat.iter() {
+            for y in stat.iter() {
                 if x != y {
                     frame
                         .d
@@ -214,25 +221,25 @@ impl FrameStack {
         self.list.iter().rev().any(|fr| fr.v.contains(token))
     }
 
-    fn lookup_f(&self, var: String) -> String {
+    fn lookup_f(&self, var: String) -> Label {
         // println!("lookup {}", var);
         let f = self
             .list
             .iter()
             .rev()
-            .find(|frame| frame.f_labels.contains_key(&var))
+            .find(|frame| frame.f_labels.contains_key(var.as_str()))
             .unwrap();
 
-        f.f_labels[&var].clone()
+        f.f_labels[var.as_str()].clone()
     }
 
-    fn lookup_d(&mut self, x: String, y: String) -> bool {
+    fn lookup_d(&mut self, x: LanguageToken, y: LanguageToken) -> bool {
         self.list.iter().rev().any(|fr| {
             fr.d.contains(&(min(x.clone(), y.clone()), max(x.clone(), y.clone())))
         })
     }
 
-    fn lookup_e(&self, stmt: Statement) -> String {
+    fn lookup_e(&self, stmt: Statement) -> Label {
         let f = self
             .list
             .iter()
@@ -250,25 +257,21 @@ impl FrameStack {
 
         let chained = e_hyps.iter().chain(std::iter::once(&stat));
 
-        let mut mand_vars: HashSet<&String> =
-            chained.flatten().filter(|tok| self.lookup_v(tok)).collect();
+        let mut mand_vars: HashSet<LanguageToken> =
+            chained.flat_map(|x| x.iter()).filter(|tok| self.lookup_v(tok)).cloned().collect(); //cloned should do a shallow copy
 
         // println!("ma: \n mand_vars: {:?}, ", mand_vars);
 
-        // this is absolutely terrible.
-        // Definetely needs to be redone
-        let cartesian: HashSet<(String, String)> = mand_vars
-            .clone()
-            .into_iter()
-            .flat_map(|x| {
-                mand_vars
-                    .clone()
-                    .into_iter()
-                    .map(move |y| (x.clone(), y.clone()))
-            })
-            .collect();
 
-        let dvs: HashSet<(String, String)> = self
+        let mut cartesian : HashSet<(LanguageToken, LanguageToken)> = HashSet::new();
+
+        for x in mand_vars.iter() {
+            for y in mand_vars.iter() {
+                cartesian.insert((x.clone(), y.clone()));
+            }
+        }
+
+        let dvs: HashSet<(LanguageToken, LanguageToken)> = self
             .list
             .iter()
             .flat_map(|fr| fr.d.intersection(&cartesian))
@@ -278,9 +281,9 @@ impl FrameStack {
         let mut f_hyps = VecDeque::new();
         self.list.iter().rev().for_each(|fr| {
             fr.f.iter().rev().for_each(|(v, k)| {
-                if mand_vars.contains(&v) {
+                if mand_vars.contains(v) {
                     f_hyps.push_front((k.clone(), v.clone()));
-                    mand_vars.remove(&v);
+                    mand_vars.remove(v);
                 }
             });
         });
@@ -304,11 +307,10 @@ enum LabelEntry {
     DollarE(Statement),
     DollarF(Statement),
 }
-// the original seems to abuse python's type system to create this,
-// ideally I'd use a real AST
+
 struct MM {
     fs: FrameStack,
-    labels: HashMap<String, Rc<LabelEntry>>,
+    labels: HashMap<Label, Rc<LabelEntry>>,
     begin_label: Option<String>,
     stop_label: Option<String>,
 }
@@ -333,28 +335,28 @@ impl MM {
             match tok.as_deref() {
                 Some("$}") => break,
                 Some("$c") => {
-                    for tok in toks.readstat() {
-                        self.fs.add_c(tok);
+                    for tok in toks.readstat().iter() {
+                        self.fs.add_c(tok.clone());
                     }
                 }
                 Some("$v") => {
-                    for tok in toks.readstat() {
-                        self.fs.add_v(tok);
+                    for tok in toks.readstat().iter() {
+                        self.fs.add_v(tok.clone());
                     }
                 }
                 Some("$f") => {
                     let stat = toks.readstat();
-                    let label_u = label.expect("$f must have a label");
+                    let label_u : Label = label.expect("$f must have a label").into();
                     if stat.len() != 2 {
                         panic!("$f must have length 2");
                     }
 
                     // println!("{} $f {} {} $.", label_u, stat[0].clone(), stat[1].clone());
                     self.fs
-                        .add_f(stat[1].clone(), stat[0].clone(), label_u.to_string());
-                    let data = LabelEntry::DollarF(vec![stat[0].clone(), stat[1].clone()]);
+                        .add_f(stat[1].clone(), stat[0].clone(), label_u.clone());
+                    let data = LabelEntry::DollarF(Rc::new([stat[0].clone(), stat[1].clone()]));
                     self.labels
-                        .insert(label_u.to_string(), Rc::new(data));
+                        .insert(label_u, Rc::new(data));
                     label = None;
                 }
                 Some("$a") => {
@@ -366,25 +368,26 @@ impl MM {
 
                     let data = LabelEntry::DollarA(self.fs.make_assertion(toks.readstat()));
                     self.labels
-                        .insert(label_u.to_string(), Rc::new(data));
+                        .insert(label_u.into(), Rc::new(data));
                     label = None;
                 }
 
                 Some("$e") => {
-                    let label = label.clone().expect("e must have label");
+                    let label_u: Label = label.expect("e must have label").into();
 
                     let stat = toks.readstat();
-                    self.fs.add_e(stat.clone(), label.clone());
+                    self.fs.add_e(stat.clone(), label_u.clone());
                     let data = LabelEntry::DollarE(stat);
-                    self.labels.insert(label, Rc::new(data));
+                    self.labels.insert(label_u.clone(), Rc::new(data));
+                    label = None;
                 }
                 Some("$p") => {
                     let label_u = label.clone().expect("$p must have elabel");
-                    if label == self.stop_label {
+                    if label == self.stop_label { //could be rewritten better
                         std::process::exit(0);
                     }
                     let stat = toks.readstat();
-                    let i = stat.iter().position(|x| x == "$=").expect("Mmust have $=");
+                    let i = stat.iter().position(|x| x.as_ref() == "$=").expect("Mmust have $=");
                     let proof = &stat[i + 1..].to_vec();
                     let stat = &stat[..i];
 
@@ -394,10 +397,10 @@ impl MM {
                     }
                     if self.begin_label.is_none() {
                         println!("verifying {}", label_u);
-                        self.verify(label_u.clone(), stat.to_vec(), proof.to_vec());
+                        self.verify(label_u.clone(), stat.into(), proof.to_vec());
                     }
-                    let data = LabelEntry::DollarP(self.fs.make_assertion(stat.to_vec()));
-                    self.labels.insert(label_u, Rc::new(data));
+                    let data = LabelEntry::DollarP(self.fs.make_assertion(stat.into()));
+                    self.labels.insert(label_u.into(), Rc::new(data));
                     label = None;
                 }
                 Some("$d") => {
@@ -419,22 +422,22 @@ impl MM {
         self.fs.list.pop();
     }
 
-    fn apply_subst(&self, stat: &Statement, subst: &HashMap<String, Statement>) -> Statement {
-        let mut result = vec![];
+    fn apply_subst(&self, stat: &Statement, subst: &HashMap<LanguageToken, Statement>) -> Statement {
+        let mut result : Vec<LanguageToken>= vec![];
 
-        for tok in stat {
-            if subst.contains_key(tok.as_str()) {
-                result.extend(subst[tok.as_str()].clone()); //very bad again
+        for tok in stat.iter() {
+            if subst.contains_key(tok.as_ref()) {
+                result.extend(subst[tok.as_ref()].iter().cloned()); //the cloned shouldn't deep copy
             } else {
-                result.push(tok.to_string());
+                result.push(tok.clone());
             }
         }
-        result
+        result.into()
     }
 
-    fn find_vars(&self, stat: &Statement) -> Vec<String> {
-        let mut vars: Vec<String> = vec![];
-        for x in stat {
+    fn find_vars(&self, stat: Statement) -> Vec<LanguageToken> {
+        let mut vars: Vec<LanguageToken> = vec![];
+        for x in stat.iter() {
             if !vars.contains(x) && self.fs.lookup_v(x) {
                 vars.push(x.to_owned());
             }
@@ -443,7 +446,7 @@ impl MM {
         vars
     }
 
-    fn decompress_proof(&mut self, stat: Statement, proof: Vec<String>) -> Vec<String> {
+    fn decompress_proof(&mut self, stat: Statement, proof: Proof) -> Proof {  //I should change the type system to differentiate betweene the different types of proofs
         // println!("Statement {:?}", stat);
 
         let Assertion {
@@ -458,18 +461,18 @@ impl MM {
             .iter()
             .map(|(_k, v)| self.fs.lookup_f(v.to_string()));
 
-        let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.to_vec()));
+        let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.clone()));
 
         // println!("mand_hyps {:?}", mand_hyps);
         // println!("hyps {:?}", hyps);
-        let mut labels: Vec<String> = mand_hyps.chain(hyps).collect();
+        let mut labels: Vec<Label> = mand_hyps.chain(hyps).collect();
         // println!("Labels {:?}", labels);
 
         let hyp_end = labels.len();
 
         let ep = proof
             .iter()
-            .position(|x| x == ")")
+            .position(|x| x.as_ref() == ")")
             .expect("Failed to find matching parthesis");
 
         labels.extend((&proof[1..ep]).iter().cloned());
@@ -568,10 +571,11 @@ impl MM {
             .collect(); //fix the clone
     }
 
-    fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Vec<String>) {
+
+    fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Proof) {
         let mut stack: Vec<Statement> = vec![];
         let _stat_type = stat[0].clone();
-        if proof[0] == "(" {
+        if proof[0].as_ref() == "(" {
             proof = self.decompress_proof(stat.clone(), proof);
         }
 
@@ -601,7 +605,7 @@ impl MM {
                         panic!("stack underflow")
                     }
                     let mut sp = sp as usize;
-                    let mut subst = HashMap::<String, Statement>::new();
+                    let mut subst = HashMap::<LanguageToken, Statement>::new();
 
                     for (k, v) in mand_var {
                         let entry: Statement = stack[sp].clone();
@@ -611,22 +615,23 @@ impl MM {
                             panic!("stack entry doesn't match mandatry var hypothess");
                         }
 
-                        subst.insert(v.to_string(), entry[1..].to_vec());
+                        subst.insert(v.clone(), entry[1..].into());
                         sp += 1;
                     }
                     // println!("subst: {:?}", subst);
 
                     for (x, y) in distinct {
                         // println!("dist {:?} {:?} {:?} {:?}", x, y, subst[x], subst[y]);
-                        let x_vars = self.find_vars(&subst[x]);
-                        let y_vars = self.find_vars(&subst[y]);
+                        let x_vars = self.find_vars(subst[x].clone());
+                        let y_vars = self.find_vars(subst[y].clone());
+
 
                         // println!("V(x) = {:?}", x_vars);
                         // println!("V(y) = {:?}", y_vars);
 
                         for x in &x_vars {
                             for y in &y_vars {
-                                if x == y || !self.fs.lookup_d(x.to_string(), y.to_string()) {
+                                if x == y || !self.fs.lookup_d(x.clone(), y.clone()) {
                                     panic!("Disjoint violation");
                                 }
                             }
@@ -634,7 +639,7 @@ impl MM {
                     }
                     for h in hyp {
                         let entry = &stack[sp];
-                        let subst_h = self.apply_subst(&h.to_vec(), &subst);
+                        let subst_h = self.apply_subst(&h, &subst);
                         if entry != &subst_h {
                             panic!("Stack entry doesn't match hypothesis")
                         }
@@ -648,7 +653,7 @@ impl MM {
                     // println!("stack: {:?}", stack);
                 }
                 LabelEntry::DollarF(x) | LabelEntry::DollarE(x)=> {
-                    stack.push((*x).to_vec());
+                    stack.push(x.clone());
                 }
             }
             // // // // println!("st: {:?}", stack);
