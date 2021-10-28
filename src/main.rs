@@ -216,16 +216,16 @@ impl FrameStack {
         self.list.iter().rev().any(|fr| fr.v.contains(token))
     }
 
-    fn lookup_f(&self, var: String) -> Label {
+    fn lookup_f(&self, var: LanguageToken) -> Label {
         // println!("lookup {}", var);
         let f = self
             .list
             .iter()
             .rev()
-            .find(|frame| frame.f_labels.contains_key(var.as_str()))
+            .find(|frame| frame.f_labels.contains_key(&var))
             .unwrap();
 
-        f.f_labels[var.as_str()].clone()
+        f.f_labels[&var].clone()
     }
 
     fn lookup_d(&mut self, x: LanguageToken, y: LanguageToken) -> bool {
@@ -463,16 +463,16 @@ impl MM {
 
         let mand_hyps = mand_hyp_stmnts
             .iter()
-            .map(|(_k, v)| self.fs.lookup_f(v.to_string()));
+            .map(|(_k, v)| self.fs.lookup_f(v.clone()));
 
         let hyps = hype_stmnts.iter().map(|s| self.fs.lookup_e(s.clone()));
 
         // println!("mand_hyps {:?}", mand_hyps);
         // println!("hyps {:?}", hyps);
-        let mut labels: Vec<Label> = mand_hyps.chain(hyps).collect();
+        let mut labels: Vec<Label> = mand_hyps.chain(hyps).collect(); // contains both the mandatory hypotheses and the ones in the proof
         // println!("Labels {:?}", labels);
 
-        let hyp_end = labels.len();
+        let hyp_end = labels.len(); //when the mandatory hypotheses end
 
         let ep = proof
             .iter()
@@ -505,31 +505,33 @@ impl MM {
         let label_end = labels.len();
         // println!("labels: {:?}", labels);
 
-        let mut decompressed_ints = vec![];
-        let mut subproofs = vec![];
-        let mut prev_proofs: Vec<Vec<usize>> = vec![];
+        let mut decompressed_ints : Vec<usize> = vec![];
+        type CompressedProof = Rc<[usize]>;
+        let mut subproofs : Vec<CompressedProof> = vec![]; //stuff tagged  with Zs
+        let mut prev_proofs: Vec<CompressedProof> = vec![];
 
         for pf_int in &proof_indeces {
             // println!("subproofs : {:?}", subproofs);
             // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
             match pf_int {
                 None => {
-                    subproofs.push(prev_proofs.last().unwrap().clone());
+                    subproofs.push(prev_proofs.last().expect("Error in decompressing proof, found unexpected Z").clone());
                 }
                 Some(i) if *i < hyp_end => {
-                    prev_proofs.push(vec![*i]);
+                    //mandatory hypothesis
+                    prev_proofs.push(Rc::new([*i]));
                     decompressed_ints.push(*i);
                 }
 
-                Some(i) if hyp_end <= (*i as usize) && (*i as usize) < label_end => {
+                Some(i) if hyp_end <= *i  && *i < label_end => {
+                    //one of the given labels in the proof
                     decompressed_ints.push(*i);
 
-                    let step = &self.labels[&labels[*i as usize]];
+                    let label_name = &labels[*i];
 
-                    let step_data = step;
+                    let step_data = &self.labels[label_name];
 
-                    match &**step_data {
-                        //this seems wrong
+                    match &**step_data { //syntax doesn't look correct
                         LabelEntry::DollarA(Assertion {
                             dvs: _sd,
                             f_hyps: svars,
@@ -549,6 +551,7 @@ impl MM {
                                 let new_index = prev_proofs.len() - nhyps;
                                 new_prevpf = prev_proofs[(new_index)..]
                                     .iter()
+                                    .map(|x| x.iter())
                                     .flatten()
                                     .copied()
                                     .chain(std::iter::once(*i))
@@ -557,9 +560,9 @@ impl MM {
                             } else {
                                 new_prevpf = vec![*i];
                             }
-                            prev_proofs.push(new_prevpf)
+                            prev_proofs.push(new_prevpf.into())
                         }
-                        _ => prev_proofs.push(vec![*i]),
+                        _ => prev_proofs.push(Rc::new([*i])),
                     }
                 }
 
@@ -567,12 +570,12 @@ impl MM {
                     // println!("*i: {:?}, label_end: {:?}", pf_int, label_end);
                     let pf = &subproofs[(*i as usize) - label_end];
                     // println!("expanded subpf {:?}", pf);
-                    decompressed_ints.extend(pf);
-                    prev_proofs.push(pf.to_vec());
+                    decompressed_ints.extend(pf.iter());
+                    prev_proofs.push(pf.clone());
                 }
 
                 _ => {
-                    panic!("Something bad happend")
+                    panic!("Bad compression")
                 }
             }
         }
