@@ -482,18 +482,18 @@ impl MM {
         // println!("Labels {:?}", labels);
         // println!("proof {}", compressed_proof);
 
-        let mut proof_ints: Vec<i32> = vec![];
-        let mut cur_int = 0;
+        let mut proof_indeces: Vec<Option<usize>> = vec![];
+        let mut cur_index : usize = 0;
 
         for ch in compressed_proof.chars() {
             if ch == 'Z' {
-                proof_ints.push(-1); //change this to option instead of this hack
+                proof_indeces.push(None);
             } else if ('A'..='T').contains(&ch) {
-                cur_int = 20 * cur_int + (ch as i32 - 'A' as i32 + 1) as i32;
-                proof_ints.push(cur_int - 1);
-                cur_int = 0;
+                cur_index = 20 * cur_index + (ch as i32 - 'A' as i32 + 1) as usize;
+                proof_indeces.push(Some(cur_index - 1));
+                cur_index = 0;
             } else if ('U'..='Y').contains(&ch) {
-                cur_int = 5 * cur_int + (ch as i32 - 'U' as i32 + 1) as i32;
+                cur_index = 5 * cur_index + (ch as i32 - 'U' as i32 + 1) as usize;
             }
         }
         // println!("proof_ints: {:?}", proof_ints);
@@ -503,67 +503,77 @@ impl MM {
 
         let mut decompressed_ints = vec![];
         let mut subproofs = vec![];
-        let mut prev_proofs: Vec<Vec<i32>> = vec![]; //ideally change this to a usize
+        let mut prev_proofs: Vec<Vec<usize>> = vec![];
 
-        for pf_int in &proof_ints {
+        for pf_int in &proof_indeces {
             // println!("subproofs : {:?}", subproofs);
             // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
-
-            let pf_int = *pf_int;
-            if pf_int == -1 {
-                subproofs.push(prev_proofs.last().unwrap().clone());
-            } else if 0 <= pf_int && pf_int < (hyp_end as i32) {
-                prev_proofs.push(vec![pf_int]);
-                decompressed_ints.push(pf_int);
-            } else if hyp_end <= (pf_int as usize) && (pf_int as usize) < label_end {
-                decompressed_ints.push(pf_int);
-
-                let step = &self.labels[&labels[pf_int as usize]];
-
-                let step_data = step;
-
-
-                match &**step_data { //this seems wrong
-                    LabelEntry::DollarA(Assertion {
-                        dvs: _sd,
-                        f_hyps: svars,
-                        e_hyps: shyps,
-                        stat: _sresult,
-                    }) | LabelEntry::DollarP(Assertion {
-                        dvs: _sd,
-                        f_hyps: svars,
-                        e_hyps: shyps,
-                        stat: _sresult,
-                    }) => {
-                        let nhyps = shyps.len() + svars.len();
-
-                        let new_prevpf: Vec<i32>;
-                        if nhyps != 0 {
-                            let new_index = prev_proofs.len() - nhyps;
-                            new_prevpf = prev_proofs[(new_index)..]
-                                .iter()
-                                .flatten()
-                                .copied()
-                                .chain(std::iter::once(pf_int))
-                                .collect();
-                            prev_proofs = prev_proofs[..new_index].to_vec();
-                        } else {
-                            new_prevpf = vec![pf_int];
-                        }
-                        prev_proofs.push(new_prevpf)
-                    }
-                    _ => prev_proofs.push(vec![pf_int]),
+            match pf_int {
+                None => {
+                    subproofs.push(prev_proofs.last().unwrap().clone());
                 }
-            } else if label_end as i32 <= pf_int {
-                // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
-                let pf = &subproofs[(pf_int as usize) - label_end];
-                // println!("expanded subpf {:?}", pf);
-                decompressed_ints.extend(pf);
-                prev_proofs.push(pf.to_vec());
+                Some(i) if 0 <= *i && *i < hyp_end => {
+                    prev_proofs.push(vec![*i]);
+                    decompressed_ints.push(*i);
+                }
+
+                Some(i) if hyp_end <= (*i as usize) && (*i as usize) < label_end => {
+
+                    decompressed_ints.push(*i);
+
+                    let step = &self.labels[&labels[*i as usize]];
+
+                    let step_data = step;
+
+
+                    match &**step_data { //this seems wrong
+                        LabelEntry::DollarA(Assertion {
+                            dvs: _sd,
+                            f_hyps: svars,
+                            e_hyps: shyps,
+                            stat: _sresult,
+                        }) | LabelEntry::DollarP(Assertion {
+                            dvs: _sd,
+                            f_hyps: svars,
+                            e_hyps: shyps,
+                            stat: _sresult,
+                        }) => {
+                            let nhyps = shyps.len() + svars.len();
+
+                            let new_prevpf: Vec<usize>;
+                            if nhyps != 0 {
+                                let new_index = prev_proofs.len() - nhyps;
+                                new_prevpf = prev_proofs[(new_index)..]
+                                    .iter()
+                                    .flatten()
+                                    .copied()
+                                    .chain(std::iter::once(*i))
+                                    .collect();
+                                prev_proofs = prev_proofs[..new_index].to_vec();
+                            } else {
+                                new_prevpf = vec![*i];
+                            }
+                            prev_proofs.push(new_prevpf)
+                        }
+                        _ => prev_proofs.push(vec![*i]),
+                    }
+                }
+
+                Some(i) if label_end  <= *i => {
+
+                    // println!("*i: {:?}, label_end: {:?}", pf_int, label_end);
+                    let pf = &subproofs[(*i as usize) - label_end];
+                    // println!("expanded subpf {:?}", pf);
+                    decompressed_ints.extend(pf);
+                    prev_proofs.push(pf.to_vec());
+                }
+
+                _ => {
+                    panic!("Something bad happend")
+                }
             }
         }
 
-        // println!("decompressed ints: {:?}", decompressed_ints);
 
         return decompressed_ints
             .iter()
@@ -572,11 +582,13 @@ impl MM {
     }
 
 
-    fn verify(&mut self, _stat_label: String, stat: Statement, mut proof: Proof) {
+    fn verify(&mut self, stat_label: String, stat: Statement, mut proof: Proof) {
         let mut stack: Vec<Statement> = vec![];
         let _stat_type = stat[0].clone();
         if proof[0].as_ref() == "(" {
+            println!("Starting decompression for {}", stat_label);
             proof = self.decompress_proof(stat.clone(), proof);
+            println!("Finished decompression for {}", stat_label);
         }
 
         for label in proof {
@@ -622,7 +634,7 @@ impl MM {
 
                     for (x, y) in distinct {
                         // println!("dist {:?} {:?} {:?} {:?}", x, y, subst[x], subst[y]);
-                        let x_vars = self.find_vars(subst[x].clone());
+                        let x_vars = self.find_vars(Rc::clone(&subst[x]));
                         let y_vars = self.find_vars(subst[y].clone());
 
 
