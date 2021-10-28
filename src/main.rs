@@ -639,7 +639,7 @@ impl MM {
                     }
                     for h in hyp {
                         let entry = &stack[sp];
-                        let subst_h = self.apply_subst(&h, &subst);
+                        let subst_h = self.apply_subst(h, &subst);
                         if entry != &subst_h {
                             panic!("Stack entry doesn't match hypothesis")
                         }
@@ -649,7 +649,7 @@ impl MM {
                     // println!("stack: {:?}", stack);
                     stack.drain(stack.len() - npop..);
                     // println!("stack: {:?}", stack);
-                    stack.push(self.apply_subst(&result, &subst));
+                    stack.push(self.apply_subst(result, &subst));
                     // println!("stack: {:?}", stack);
                 }
                 LabelEntry::DollarF(x) | LabelEntry::DollarE(x)=> {
