@@ -61,22 +61,22 @@ impl Tokens {
         let mut token = self.read();
         // println!("In read file found token {:?}", token);
         while let Some("$[") = token.as_deref() {
-                    let filename = self.read().expect("Couldn't find filename");
-                    let endbracket = self.read().expect("Coludn't find end bracket");
+            let filename = self.read().expect("Couldn't find filename");
+            let endbracket = self.read().expect("Coludn't find end bracket");
 
-                    // println!("In read file found filename: {:?}, endbracket: {:?}", filename, endbracket);
-                    if endbracket != "$]" {
-                        panic!("End bracket not found");
-                    }
+            // println!("In read file found filename: {:?}, endbracket: {:?}", filename, endbracket);
+            if endbracket != "$]" {
+                panic!("End bracket not found");
+            }
 
-                    if !self.imported_files.contains(&filename) {
-                        // println!("Found new file {}", &filename);
+            if !self.imported_files.contains(&filename) {
+                // println!("Found new file {}", &filename);
 
-                        self.lines_buffer.push(BufReader::new(
-                            File::open(filename.clone()).expect("Failed to open file"),
-                        ));
-                        self.imported_files.insert(filename);
-                    }
+                self.lines_buffer.push(BufReader::new(
+                    File::open(filename.clone()).expect("Failed to open file"),
+                ));
+                self.imported_files.insert(filename);
+            }
             token = self.read();
         }
         token
@@ -102,8 +102,10 @@ impl Tokens {
     }
 
     fn readstat(&mut self) -> Statement {
-        let mut stat : Vec<Rc<str>> = vec![];
-        let mut token = self.read_comment().expect("Failed to read token in read stat");
+        let mut stat: Vec<Rc<str>> = vec![];
+        let mut token = self
+            .read_comment()
+            .expect("Failed to read token in read stat");
 
         // println!("In read stat, found token to be {:?}", token);
         while token != "$." {
@@ -250,13 +252,15 @@ impl FrameStack {
 
         let chained = e_hyps.iter().chain(std::iter::once(&stat));
 
-        let mut mand_vars: HashSet<LanguageToken> =
-            chained.flat_map(|x| x.iter()).filter(|tok| self.lookup_v(tok)).cloned().collect(); //cloned should do a shallow copy
+        let mut mand_vars: HashSet<LanguageToken> = chained
+            .flat_map(|x| x.iter())
+            .filter(|tok| self.lookup_v(tok))
+            .cloned()
+            .collect(); //cloned should do a shallow copy
 
         // println!("ma: \n mand_vars: {:?}, ", mand_vars);
 
-
-        let mut cartesian : HashSet<(LanguageToken, LanguageToken)> = HashSet::new();
+        let mut cartesian: HashSet<(LanguageToken, LanguageToken)> = HashSet::new();
 
         for x in mand_vars.iter() {
             for y in mand_vars.iter() {
@@ -339,7 +343,7 @@ impl MM {
                 }
                 Some("$f") => {
                     let stat = toks.readstat();
-                    let label_u : Label = label.expect("$f must have a label").into();
+                    let label_u: Label = label.expect("$f must have a label").into();
                     if stat.len() != 2 {
                         panic!("$f must have length 2");
                     }
@@ -348,8 +352,7 @@ impl MM {
                     self.fs
                         .add_f(stat[1].clone(), stat[0].clone(), label_u.clone());
                     let data = LabelEntry::DollarF(Rc::new([stat[0].clone(), stat[1].clone()]));
-                    self.labels
-                        .insert(label_u, Rc::new(data));
+                    self.labels.insert(label_u, Rc::new(data));
                     label = None;
                 }
                 Some("$a") => {
@@ -360,8 +363,7 @@ impl MM {
                     }
 
                     let data = LabelEntry::DollarA(self.fs.make_assertion(toks.readstat()));
-                    self.labels
-                        .insert(label_u.into(), Rc::new(data));
+                    self.labels.insert(label_u.into(), Rc::new(data));
                     label = None;
                 }
 
@@ -376,11 +378,15 @@ impl MM {
                 }
                 Some("$p") => {
                     let label_u = label.clone().expect("$p must have elabel");
-                    if label == self.stop_label { //could be rewritten better
+                    if label == self.stop_label {
+                        //could be rewritten better
                         std::process::exit(0);
                     }
                     let stat = toks.readstat();
-                    let i = stat.iter().position(|x| x.as_ref() == "$=").expect("Mmust have $=");
+                    let i = stat
+                        .iter()
+                        .position(|x| x.as_ref() == "$=")
+                        .expect("Mmust have $=");
                     let proof = &stat[i + 1..].to_vec();
                     let stat = &stat[..i];
 
@@ -415,8 +421,12 @@ impl MM {
         self.fs.list.pop();
     }
 
-    fn apply_subst(&self, stat: &Statement, subst: &HashMap<LanguageToken, Statement>) -> Statement {
-        let mut result : Vec<LanguageToken>= vec![];
+    fn apply_subst(
+        &self,
+        stat: &Statement,
+        subst: &HashMap<LanguageToken, Statement>,
+    ) -> Statement {
+        let mut result: Vec<LanguageToken> = vec![];
 
         for tok in stat.iter() {
             if subst.contains_key(tok.as_ref()) {
@@ -439,7 +449,8 @@ impl MM {
         vars
     }
 
-    fn decompress_proof(&mut self, stat: Statement, proof: Proof) -> Proof {  //I should change the type system to differentiate betweene the different types of proofs
+    fn decompress_proof(&mut self, stat: Statement, proof: Proof) -> Proof {
+        //I should change the type system to differentiate betweene the different types of proofs
         // println!("Statement {:?}", stat);
 
         let Assertion {
@@ -476,7 +487,7 @@ impl MM {
         // println!("proof {}", compressed_proof);
 
         let mut proof_indeces: Vec<Option<usize>> = vec![];
-        let mut cur_index : usize = 0;
+        let mut cur_index: usize = 0;
 
         for ch in compressed_proof.chars() {
             if ch == 'Z' {
@@ -511,21 +522,21 @@ impl MM {
                 }
 
                 Some(i) if hyp_end <= (*i as usize) && (*i as usize) < label_end => {
-
                     decompressed_ints.push(*i);
 
                     let step = &self.labels[&labels[*i as usize]];
 
                     let step_data = step;
 
-
-                    match &**step_data { //this seems wrong
+                    match &**step_data {
+                        //this seems wrong
                         LabelEntry::DollarA(Assertion {
                             dvs: _sd,
                             f_hyps: svars,
                             e_hyps: shyps,
                             stat: _sresult,
-                        }) | LabelEntry::DollarP(Assertion {
+                        })
+                        | LabelEntry::DollarP(Assertion {
                             dvs: _sd,
                             f_hyps: svars,
                             e_hyps: shyps,
@@ -552,8 +563,7 @@ impl MM {
                     }
                 }
 
-                Some(i) if label_end  <= *i => {
-
+                Some(i) if label_end <= *i => {
                     // println!("*i: {:?}, label_end: {:?}", pf_int, label_end);
                     let pf = &subproofs[(*i as usize) - label_end];
                     // println!("expanded subpf {:?}", pf);
@@ -567,13 +577,11 @@ impl MM {
             }
         }
 
-
         return decompressed_ints
             .iter()
             .map(|i| labels[*i as usize].clone())
             .collect(); //fix the clone
     }
-
 
     fn verify(&mut self, stat_label: String, stat: Statement, mut proof: Proof) {
         let mut stack: Vec<Statement> = vec![];
@@ -594,12 +602,13 @@ impl MM {
                     f_hyps: mand_var,
                     e_hyps: hyp,
                     stat: result,
-                }) |  LabelEntry::DollarP(Assertion {
+                })
+                | LabelEntry::DollarP(Assertion {
                     dvs: distinct,
                     f_hyps: mand_var,
                     e_hyps: hyp,
                     stat: result,
-                })=> {
+                }) => {
                     // println!("{:?}", stepdat);
                     // println!("stack: {:?}", stack);
                     let npop = mand_var.len() + hyp.len();
@@ -630,7 +639,6 @@ impl MM {
                         let x_vars = self.find_vars(Rc::clone(&subst[x]));
                         let y_vars = self.find_vars(subst[y].clone());
 
-
                         // println!("V(x) = {:?}", x_vars);
                         // println!("V(y) = {:?}", y_vars);
 
@@ -657,7 +665,7 @@ impl MM {
                     stack.push(self.apply_subst(result, &subst));
                     // println!("stack: {:?}", stack);
                 }
-                LabelEntry::DollarF(x) | LabelEntry::DollarE(x)=> {
+                LabelEntry::DollarF(x) | LabelEntry::DollarE(x) => {
                     stack.push(x.clone());
                 }
             }
