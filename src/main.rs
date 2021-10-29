@@ -714,6 +714,12 @@ fn main() {
 
     let file = File::open(args[1].clone()).expect("Failed to find file");
     // println!("Found file name {:?}", args[1]);
+    use std::time::Instant;
+    let now = Instant::now();
+
+
     mm.read(&mut Tokens::new(BufReader::new(file)));
     mm.dump();
+    let elapsed = now.elapsed();
+    println!("Finished checking in {:.2?}", elapsed);
 }
