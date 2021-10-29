@@ -544,23 +544,40 @@ impl MM {
                             e_hyps: shyps,
                             stat: _sresult,
                         }) => {
+                            // when we get things that take hypothesis, we have to include those
+                            // in the list of previos proof,
                             let nhyps = shyps.len() + svars.len();
 
-                            let new_prevpf: Vec<usize>;
+                            let new_index = prev_proofs.len() - nhyps;
+
+                            // let new_prevpf;
+                            // if nhyps != 0 {
+                            //     let new_index = prev_proofs.len() - nhyps;
+
+
+                            //     new_prevpf = prev_proofs[(new_index)..]
+                            //         .iter()
+                            //         .map(|x| x.iter())
+                            //         .flatten()
+                            //         .chain(std::iter::once(i));
+                            //     prev_proofs = prev_proofs[..new_index].to_vec();
+                            // } else {
+                            //     new_prevpf = std::iter::once(i);
+                            // }
+
+
                             if nhyps != 0 {
-                                let new_index = prev_proofs.len() - nhyps;
-                                new_prevpf = prev_proofs[(new_index)..]
-                                    .iter()
-                                    .map(|x| x.iter())
-                                    .flatten()
-                                    .copied()
-                                    .chain(std::iter::once(*i))
-                                    .collect();
-                                prev_proofs = prev_proofs[..new_index].to_vec();
+                                let mand_hyps : Vec<CompressedProof> = prev_proofs.drain(new_index..).collect(); // I tried putting this in oneb ig iterator but it didn't work
+
+
+                                let new_prevpf = mand_hyps.iter().flat_map(|x| x.iter()).chain(std::iter::once(i));
+
+                                prev_proofs.push(new_prevpf.copied().collect())
                             } else {
-                                new_prevpf = vec![*i];
+
+                                prev_proofs.push(Rc::new([*i]));
                             }
-                            prev_proofs.push(new_prevpf.into())
+
                         }
                         _ => prev_proofs.push(Rc::new([*i])),
                     }
