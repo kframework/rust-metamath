@@ -617,6 +617,11 @@ impl MM {
             println!("Finished decompression for {}", stat_label);
         }
 
+        if proof.is_empty() {
+            println!("Did not find proof for {}, skipping", stat_label);
+            return;
+        }
+
         for label in proof {
             let stepdat = &self.labels[&label];
             // println!("{:?} : {:?}", label, self.labels[&label]);
