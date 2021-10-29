@@ -470,7 +470,7 @@ impl MM {
         // println!("mand_hyps {:?}", mand_hyps);
         // println!("hyps {:?}", hyps);
         let mut labels: Vec<Label> = mand_hyps.chain(hyps).collect(); // contains both the mandatory hypotheses and the ones in the proof
-        // println!("Labels {:?}", labels);
+                                                                      // println!("Labels {:?}", labels);
 
         let hyp_end = labels.len(); //when the mandatory hypotheses end
 
@@ -505,9 +505,9 @@ impl MM {
         let label_end = labels.len();
         // println!("labels: {:?}", labels);
 
-        let mut decompressed_ints : Vec<usize> = vec![];
+        let mut decompressed_ints: Vec<usize> = vec![];
         type CompressedProof = Rc<[usize]>;
-        let mut subproofs : Vec<CompressedProof> = vec![]; //stuff tagged  with Zs
+        let mut subproofs: Vec<CompressedProof> = vec![]; //stuff tagged  with Zs
         let mut prev_proofs: Vec<CompressedProof> = vec![];
 
         for pf_int in &proof_indeces {
@@ -515,7 +515,12 @@ impl MM {
             // println!("pf_int: {:?}, label_end: {:?}", pf_int, label_end);
             match pf_int {
                 None => {
-                    subproofs.push(prev_proofs.last().expect("Error in decompressing proof, found unexpected Z").clone());
+                    subproofs.push(
+                        prev_proofs
+                            .last()
+                            .expect("Error in decompressing proof, found unexpected Z")
+                            .clone(),
+                    );
                 }
                 Some(i) if *i < hyp_end => {
                     //mandatory hypothesis
@@ -523,7 +528,7 @@ impl MM {
                     decompressed_ints.push(*i);
                 }
 
-                Some(i) if hyp_end <= *i  && *i < label_end => {
+                Some(i) if hyp_end <= *i && *i < label_end => {
                     //one of the given labels in the proof
                     decompressed_ints.push(*i);
 
@@ -531,7 +536,8 @@ impl MM {
 
                     let step_data = &self.labels[label_name];
 
-                    match &**step_data { //syntax doesn't look correct
+                    match &**step_data {
+                        //syntax doesn't look correct
                         LabelEntry::DollarA(Assertion {
                             dvs: _sd,
                             f_hyps: svars,
@@ -554,7 +560,6 @@ impl MM {
                             // if nhyps != 0 {
                             //     let new_index = prev_proofs.len() - nhyps;
 
-
                             //     new_prevpf = prev_proofs[(new_index)..]
                             //         .iter()
                             //         .map(|x| x.iter())
@@ -565,19 +570,19 @@ impl MM {
                             //     new_prevpf = std::iter::once(i);
                             // }
 
-
                             if nhyps != 0 {
-                                let mand_hyps : Vec<CompressedProof> = prev_proofs.drain(new_index..).collect(); // I tried putting this in oneb ig iterator but it didn't work
+                                let mand_hyps: Vec<CompressedProof> =
+                                    prev_proofs.drain(new_index..).collect(); // I tried putting this in oneb ig iterator but it didn't work
 
-
-                                let new_prevpf = mand_hyps.iter().flat_map(|x| x.iter()).chain(std::iter::once(i));
+                                let new_prevpf = mand_hyps
+                                    .iter()
+                                    .flat_map(|x| x.iter())
+                                    .chain(std::iter::once(i));
 
                                 prev_proofs.push(new_prevpf.copied().collect())
                             } else {
-
                                 prev_proofs.push(Rc::new([*i]));
                             }
-
                         }
                         _ => prev_proofs.push(Rc::new([*i])),
                     }
@@ -716,7 +721,6 @@ fn main() {
     // println!("Found file name {:?}", args[1]);
     use std::time::Instant;
     let now = Instant::now();
-
 
     mm.read(&mut Tokens::new(BufReader::new(file)));
     mm.dump();
