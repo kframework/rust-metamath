@@ -39,7 +39,11 @@ parallelize the parsing, which I'm probably not going to implement because I
 think the verifying part is the slow part, and it won't matter if the parsing is
 already fast enough. 
 
+Integration with an interactive theorem prover may also be a possibility. 
+
 ## Why Rust
 
-Rust is a very fast language, the only viable alternatives would be
+Rust is a very fast language, the only other languages that could be faster
+would be C and C++. However, C and C++ are painful to work with, so that just
+leaves rust. 
 
