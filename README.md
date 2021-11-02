@@ -30,8 +30,18 @@ default, as we've had some issues relating to its performance.
 
 ## Potential Features
 
-Eventually we would like to provide some extra features to metamath itself.  It
-may be matching logic specific. 
+
+### Extending Metamath
+
+Some potential ideas for extending metamath would be adding some sort of
+modularity in the import system. For instance, something similar to the python
+module system in order to allow reuse of labels. 
+
+Another idea is implementing some sort of tagging system, in case you want to
+only verify a certain subset of your theorems, you could specifiy a certain tag
+that you want to verify (or maybe ignore). 
+
+### Paralellism
 
 Incorporating parallelism to the verifying part would be nice, and I will
 probably take inspiration from the metamath knife repo. I noticed that they also
@@ -39,11 +49,24 @@ parallelize the parsing, which I'm probably not going to implement because I
 think the verifying part is the slow part, and it won't matter if the parsing is
 already fast enough. 
 
-Integration with an interactive theorem prover may also be a possibility. 
+### Caching 
 
-## Why Rust
+Again taking inspiriation from the other rust checker, create some system of
+caching results so repeated verifications can be faster by only checking proofs
+that have changed. This would also mean creating a REPL like system, which may
+be another feature. 
 
-Rust is a very fast language, the only other languages that could be faster
-would be C and C++. However, C and C++ are painful to work with, so that just
-leaves rust. 
+### ITP
 
+Integration with an interactive theorem prover may also be a possibility. I'm
+not exactly sure what features I would want to add. 
+
+### Diagnostic information
+
+Provide information such as how long certain proofs took, or how much space
+certain proofs take. This could be used to identify which proofs should try to
+be reworked. 
+
+# Why Rust
+
+Rust is a very fast language, and I prefer it over C and C++. 
