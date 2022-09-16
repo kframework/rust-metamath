@@ -114,7 +114,7 @@ impl MM {
                         self.begin_label = None;
                     }
                     if self.begin_label.is_none() {
-                        println!("verifying {}", label_u);
+                        // println!("verifying {}", label_u);
                         self.verify(label_u.clone(), stat.into(), proof.to_vec());
                     }
                     let data = LabelEntry::DollarP(self.fs.make_assertion(stat.into()));
@@ -127,16 +127,20 @@ impl MM {
                 Some("${") => {
                     self.read(toks);
                 }
-                Some(x) if !x.starts_with('$') => {
+                Some(x) => if !x.starts_with('$') && label == None {
                     label = tok;
-                }
-                Some(_) => {
-                    // print!("tok {:?}", tok);
+                } else {
+                    panic!("unexpected token {:?}", tok)
                 }
                 None => break,
             }
             tok = toks.read_comment();
         }
+
+        if label != None {
+            panic!("unexpected EOF")
+        }
+
         self.fs.list.pop();
     }
 
@@ -168,7 +172,7 @@ impl MM {
         vars
     }
 
-    fn decompress_and_verify(&mut self, stat: Statement, proof: Proof) {
+    fn decompress_and_verify(&mut self, stat_label: String, stat: Statement, proof: Proof) {
         // yes I copy pasted this, I know it's bad
         // so please work
         //println!("complete proof {:?}", proof);
@@ -186,10 +190,10 @@ impl MM {
 
         let label_end = labels.len();
 
-
         let proof_indeces = Self::get_proof_indeces(compressed_proof);
         if proof_indeces.is_empty() {
             // we didn't do the proof yet
+            println!("Did not find proof for {}, skipping", stat_label);
             return;
         }
 
@@ -380,7 +384,7 @@ impl MM {
         let mut stack: Vec<Statement> = vec![];
         let _stat_type = stat[0].clone();
         if proof[0].as_ref() == "(" {
-            self.decompress_and_verify(stat, proof);
+            self.decompress_and_verify(stat_label, stat, proof);
             return;
         }
 
@@ -432,5 +436,5 @@ fn main() {
     mm.read(&mut Tokens::new(BufReader::new(file)));
     mm.dump();
     let elapsed = now.elapsed();
-    println!("Finished checking in {:.2?}", elapsed);
+    // println!("Finished checking in {:.2?}", elapsed);
 }
