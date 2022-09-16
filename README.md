@@ -1,5 +1,5 @@
 # rust-metamath
-A Metamath verifier written in rust
+A Metamath verifier written in rust. Forked from https://github.com/jzw2/rust-metamath.
 
 
 other verifier's that I will probably take inspiration from.
